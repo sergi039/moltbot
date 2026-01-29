@@ -17,15 +17,9 @@ export type CdpSendFn = (method: string, params?: Record<string, unknown>) => Pr
 
 export function isLoopbackHost(host: string) {
   const h = host.trim().toLowerCase();
-  return (
-    h === "localhost" ||
-    h === "127.0.0.1" ||
-    h === "0.0.0.0" ||
-    h === "[::1]" ||
-    h === "::1" ||
-    h === "[::]" ||
-    h === "::"
-  );
+  // Note: 0.0.0.0, ::, and [::] are WILDCARD addresses, not loopback.
+  // They bind to all interfaces and should NOT be treated as loopback for security purposes.
+  return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === "::1";
 }
 
 export function getHeadersWithAuth(url: string, headers: Record<string, string> = {}) {

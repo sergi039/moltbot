@@ -14,8 +14,12 @@ export type BrowserSnapshotDefaults = {
 };
 export type BrowserConfig = {
   enabled?: boolean;
-  /** If false, disable browser act:evaluate (arbitrary JS). Default: true */
+  /** If false, disable browser act:evaluate (arbitrary JS). Default: false (security) */
   evaluateEnabled?: boolean;
+  /** Bearer token for authenticating browser control API requests. Required for non-localhost access. */
+  authToken?: string;
+  /** Allowed paths/globs for file upload. If set, only files matching these patterns can be uploaded. */
+  uploadAllowlist?: string[];
   /** Base URL of the CDP endpoint (for remote browsers). Default: loopback CDP on the derived port. */
   cdpUrl?: string;
   /** Remote CDP HTTP timeout (ms). Default: 1500. */

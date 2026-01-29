@@ -30,6 +30,10 @@ export type ResolvedBrowserConfig = {
   attachOnly: boolean;
   defaultProfile: string;
   profiles: Record<string, BrowserProfileConfig>;
+  /** Bearer token for authenticating browser control API requests. */
+  authToken?: string;
+  /** Allowed paths/globs for file upload. Empty = no restriction (legacy). */
+  uploadAllowlist: string[];
 };
 
 export type ResolvedBrowserProfile = {
@@ -44,15 +48,9 @@ export type ResolvedBrowserProfile = {
 
 function isLoopbackHost(host: string) {
   const h = host.trim().toLowerCase();
-  return (
-    h === "localhost" ||
-    h === "127.0.0.1" ||
-    h === "0.0.0.0" ||
-    h === "[::1]" ||
-    h === "::1" ||
-    h === "[::]" ||
-    h === "::"
-  );
+  // Note: 0.0.0.0, ::, and [::] are WILDCARD addresses, not loopback.
+  // They bind to all interfaces and should NOT be treated as loopback for security purposes.
+  return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === "::1";
 }
 
 function normalizeHexColor(raw: string | undefined) {
@@ -198,6 +196,11 @@ export function resolveBrowserConfig(
       ? DEFAULT_BROWSER_DEFAULT_PROFILE_NAME
       : DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME);
 
+  const authToken = cfg?.authToken?.trim() || undefined;
+  const uploadAllowlist = Array.isArray(cfg?.uploadAllowlist)
+    ? cfg.uploadAllowlist.filter((p) => typeof p === "string" && p.trim())
+    : [];
+
   return {
     enabled,
     evaluateEnabled,
@@ -214,6 +217,8 @@ export function resolveBrowserConfig(
     attachOnly,
     defaultProfile,
     profiles,
+    authToken,
+    uploadAllowlist,
   };
 }
 

@@ -1,5 +1,6 @@
 import type { BrowserFormField } from "../client-actions-core.js";
 import type { BrowserRouteContext } from "../server-context.js";
+import { matchesGlobPattern } from "../../infra/glob-match.js";
 import {
   type ActKind,
   isActKind,
@@ -15,6 +16,21 @@ import {
 } from "./agent.shared.js";
 import { jsonError, toBoolean, toNumber, toStringArray, toStringOrEmpty } from "./utils.js";
 import type { BrowserRouteRegistrar } from "./types.js";
+
+/**
+ * SECURITY: Validate file paths against upload allowlist.
+ * Returns list of blocked paths, or empty if all paths are allowed.
+ */
+function validateUploadPaths(paths: string[], allowlist: string[]): string[] {
+  if (allowlist.length === 0) return []; // No restrictions (legacy behavior)
+
+  const blocked: string[] = [];
+  for (const filePath of paths) {
+    const allowed = allowlist.some((pattern) => matchesGlobPattern(pattern, filePath));
+    if (!allowed) blocked.push(filePath);
+  }
+  return blocked;
+}
 
 export function registerBrowserAgentActRoutes(
   app: BrowserRouteRegistrar,
@@ -301,6 +317,22 @@ export function registerBrowserAgentActRoutes(
     const paths = toStringArray(body.paths) ?? [];
     const timeoutMs = toNumber(body.timeoutMs);
     if (!paths.length) return jsonError(res, 400, "paths are required");
+
+    // SECURITY: Validate paths against upload allowlist
+    const uploadAllowlist = ctx.state().resolved.uploadAllowlist;
+    const blockedPaths = validateUploadPaths(paths, uploadAllowlist);
+    if (blockedPaths.length > 0) {
+      return jsonError(
+        res,
+        403,
+        [
+          "File upload blocked: paths not in allowlist.",
+          `Blocked: ${blockedPaths.join(", ")}`,
+          "Configure browser.uploadAllowlist to allow specific paths.",
+        ].join("\n"),
+      );
+    }
+
     try {
       const tab = await profileCtx.ensureTabAvailable(targetId);
       const pw = await requirePwAi(res, "file chooser hook");
