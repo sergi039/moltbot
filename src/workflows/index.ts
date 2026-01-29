@@ -137,6 +137,7 @@ export {
   validateWorktreeWorkspace,
   isGitRepo,
   getCurrentBranch,
+  sanitizeBranchName,
   type WorkspaceSetupResult,
 } from "./state/workspace.js";
 
@@ -177,6 +178,36 @@ export {
 // ============================================================================
 
 export { createHandoffPackage, loadHandoffContext, type HandoffPackage } from "./agents/handoff.js";
+
+// ============================================================================
+// Engines
+// ============================================================================
+
+export {
+  // Types
+  type WorkflowEngine,
+  type EngineContext,
+  type EngineResult,
+  type EngineProgressUpdate,
+  type EngineMetrics,
+  type PlannerOutput,
+  type ExecutorOutput,
+  type ExecutionReport,
+  type ReviewerOutput,
+  type PlannerOptions,
+  type ExecutorOptions,
+  type ReviewerOptions,
+
+  // Engines
+  PlannerEngine,
+  ExecutorEngine,
+  ReviewerEngine,
+  createPlannerEngine,
+  createExecutorEngine,
+  createReviewerEngine,
+  getEngine,
+  createEngines,
+} from "./engines/index.js";
 
 // ============================================================================
 // Constants

@@ -84,11 +84,11 @@ export const DEFAULT_UNTRACKED_CHECK_PATHS = ["src/"];
 // Artifact Files
 // ============================================================================
 
-export const PLAN_FILE = "plan.json";
+export const PLAN_FILE = "plan.md";
 export const TASKS_FILE = "tasks.json";
 export const REVIEW_FILE = "review.json";
-export const EXECUTION_REPORT_FILE = "execution-report.md";
-export const RECOMMENDATIONS_FILE = "recommendations.md";
+export const EXECUTION_REPORT_FILE = "execution-report.json";
+export const RECOMMENDATIONS_FILE = "recommendations.json";
 export const FINAL_REPORT_FILE = "final-report.md";
 export const CHANGELOG_FILE = "changelog.md";
 

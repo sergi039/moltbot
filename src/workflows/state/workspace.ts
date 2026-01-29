@@ -25,7 +25,7 @@ const SAFE_BRANCH_PATTERN = /^[-/A-Za-z0-9_.]+$/;
  * Sanitize and validate a git branch name.
  * Only allows alphanumeric, dash, slash, underscore, and dot.
  */
-function sanitizeBranchName(branch: string): string {
+export function sanitizeBranchName(branch: string): string {
   if (!SAFE_BRANCH_PATTERN.test(branch)) {
     throw new Error(
       `Invalid branch name "${branch}": contains unsafe characters. ` +
