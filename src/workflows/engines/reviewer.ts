@@ -249,7 +249,7 @@ export class ReviewerEngine implements WorkflowEngine {
     const hasTests = diffInfo.changedFiles.some(
       (f) => f.includes(".test.") || f.includes(".spec."),
     );
-    const hasTypes = diffInfo.changedFiles.some((f) => f.endsWith(".ts") || f.endsWith(".tsx"));
+    const _hasTypes = diffInfo.changedFiles.some((f) => f.endsWith(".ts") || f.endsWith(".tsx"));
 
     if (!hasTests && diffInfo.filesChanged > 0) {
       issues.push({

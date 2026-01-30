@@ -282,7 +282,7 @@ Each step is broken down into actionable tasks with clear acceptance criteria.
   private generateTaskList(
     taskDescription: string,
     projectName: string,
-    info: CodebaseInfo,
+    _info: CodebaseInfo,
   ): TaskList {
     // Parse task description to generate reasonable tasks
     // This is a simplified version - real implementation would use Claude

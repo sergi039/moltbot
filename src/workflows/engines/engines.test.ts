@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 import { PlannerEngine, ExecutorEngine, ReviewerEngine, getEngine } from "./index.js";
 import type { EngineContext, EngineProgressUpdate } from "./types.js";
 import type { WorkflowRun, PhaseDefinition, TaskList } from "../types.js";
-import { saveArtifact } from "../artifacts/store.js";
 import { setWorkflowStoragePath } from "../state/persistence.js";
 import { TASKS_FILE } from "../constants.js";
 

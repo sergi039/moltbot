@@ -109,6 +109,7 @@ export async function saveWorkflowInput(runId: string, input: WorkflowRun["input
 
 export interface WorkflowSummary {
   id: string;
+  definitionType: string;
   status: WorkflowRun["status"];
   createdAt: number;
   task: string;
@@ -135,6 +136,7 @@ export async function listWorkflows(): Promise<WorkflowSummary[]> {
 
     workflows.push({
       id: state.id,
+      definitionType: state.definitionType,
       status: state.status,
       createdAt: state.createdAt,
       task: state.input.task.slice(0, 100),

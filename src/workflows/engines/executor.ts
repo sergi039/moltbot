@@ -16,7 +16,7 @@ import type {
   ExecutorOptions,
   ExecutionReport,
 } from "./types.js";
-import type { TaskList, Task, TaskStatus } from "../types.js";
+import type { TaskList, Task } from "../types.js";
 import { loadArtifactJson, saveArtifact } from "../artifacts/store.js";
 import { TASKS_FILE, EXECUTION_REPORT_FILE, PLAN_FILE } from "../constants.js";
 
