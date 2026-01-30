@@ -20,6 +20,13 @@ import type {
 import type { TaskList, Task } from "../types.js";
 import { saveArtifact } from "../artifacts/store.js";
 import { PLAN_FILE, TASKS_FILE } from "../constants.js";
+import {
+  type EngineAgentRunner,
+  StubRunner,
+  createRunner,
+  generateSessionId,
+  mapAgentConfigToRunnerParams,
+} from "./runner.js";
 
 // ============================================================================
 // Planner Engine
@@ -30,9 +37,19 @@ export class PlannerEngine implements WorkflowEngine {
   readonly name = "Project Planner";
 
   private options: PlannerOptions;
+  private runner: EngineAgentRunner;
 
-  constructor(options: PlannerOptions = {}) {
+  constructor(options: PlannerOptions = {}, runner?: EngineAgentRunner) {
     this.options = options;
+    this.runner = runner ?? new StubRunner();
+  }
+
+  /**
+   * Check if live mode is enabled via workflow input context.
+   */
+  private isLiveMode(context: EngineContext): boolean {
+    const inputContext = context.run.input.context as Record<string, unknown> | undefined;
+    return inputContext?.live === true;
   }
 
   async validateInputs(context: EngineContext): Promise<{ valid: boolean; errors: string[] }> {
@@ -218,17 +235,223 @@ export class PlannerEngine implements WorkflowEngine {
     context: EngineContext,
     codebaseInfo: CodebaseInfo,
   ): Promise<PlannerOutput> {
-    // TODO: Integrate with runEmbeddedPiAgent() for real planning
-    // For now, generate a structured stub based on the task description
-
     const taskDescription = context.run.input.task;
     const projectName = (codebaseInfo.packageJson?.name as string) || "project";
 
-    // Generate plan markdown
-    const plan = this.generatePlanMarkdown(taskDescription, codebaseInfo);
+    // Use live mode if enabled
+    if (this.isLiveMode(context)) {
+      return this.generatePlanLive(context, codebaseInfo);
+    }
 
-    // Generate task list
+    // Stub mode: generate a structured stub based on the task description
+    const plan = this.generatePlanMarkdown(taskDescription, codebaseInfo);
     const tasks = this.generateTaskList(taskDescription, projectName, codebaseInfo);
+
+    return { plan, tasks };
+  }
+
+  /**
+   * Generate plan using real agent in live mode.
+   */
+  private async generatePlanLive(
+    context: EngineContext,
+    codebaseInfo: CodebaseInfo,
+  ): Promise<PlannerOutput> {
+    const taskDescription = context.run.input.task;
+    const projectName = (codebaseInfo.packageJson?.name as string) || "project";
+
+    // Use injected runner if available, otherwise create one for live mode
+    const runner =
+      this.runner instanceof StubRunner
+        ? createRunner({ live: true, artifactsDir: context.artifactsDir })
+        : this.runner;
+
+    // Build prompt for planning
+    const prompt = this.buildPlanningPrompt(taskDescription, codebaseInfo);
+
+    // Get agent config from phase
+    const agentParams = mapAgentConfigToRunnerParams(context.phase.agent);
+
+    // Generate session ID
+    const sessionId = generateSessionId(context.run.id, context.phase.id, context.iteration);
+
+    context.onProgress?.({
+      type: "status",
+      message: "Running live agent for planning...",
+    });
+
+    // Run the agent
+    const result = await runner.run({
+      sessionId,
+      prompt,
+      workspacePath: context.workspacePath,
+      timeoutMs: context.phase.settings.timeoutMs,
+      ...agentParams,
+      abortSignal: context.abortSignal,
+      onProgress: (msg) => {
+        context.onProgress?.({
+          type: "status",
+          message: msg.slice(0, 100),
+        });
+      },
+    });
+
+    if (!result.success) {
+      throw new Error(`Live planning failed: ${result.error}`);
+    }
+
+    // Parse the agent output to extract plan and tasks
+    const { plan, tasks } = this.parseAgentOutput(result.output, projectName);
+
+    return { plan, tasks };
+  }
+
+  /**
+   * Build the prompt for planning agent.
+   */
+  private buildPlanningPrompt(task: string, info: CodebaseInfo): string {
+    const frameworks = info.frameworks.length > 0 ? info.frameworks.join(", ") : "none detected";
+    const lang = info.hasTypeScript ? "TypeScript" : "JavaScript";
+    const structure = info.structure.slice(0, 30).join("\n  ");
+
+    return `# Planning Task
+
+## Task Description
+${task}
+
+## Project Context
+- **Language**: ${lang}
+- **Frameworks**: ${frameworks}
+- **Has Tests**: ${info.hasTests ? "Yes" : "No"}
+- **Project Structure**:
+  ${structure}
+
+## Output Requirements
+
+You must create two artifacts:
+
+### 1. Implementation Plan (plan.md)
+Create a markdown document with:
+- Task summary
+- Approach and implementation strategy
+- Key considerations and risks
+- Success criteria
+
+### 2. Task List (tasks.json)
+Create a JSON file following this exact schema:
+\`\`\`json
+{
+  "version": "1.0",
+  "projectName": "<project-name>",
+  "createdAt": <timestamp>,
+  "updatedAt": <timestamp>,
+  "tasks": [
+    {
+      "id": "task-1",
+      "title": "<clear task title>",
+      "description": "<detailed description>",
+      "type": "feature|bugfix|refactor|test|docs",
+      "priority": 1,
+      "complexity": 1-5,
+      "status": "pending",
+      "dependsOn": [],
+      "acceptanceCriteria": ["<criterion 1>", "<criterion 2>"]
+    }
+  ],
+  "stats": {
+    "total": <count>,
+    "pending": <count>,
+    "completed": 0,
+    "failed": 0
+  }
+}
+\`\`\`
+
+## Instructions
+
+1. Analyze the task requirements thoroughly
+2. Break down into atomic, implementable subtasks
+3. Identify dependencies between tasks
+4. Order by priority (1 = highest)
+5. Estimate complexity (1 = trivial, 5 = very complex)
+
+Write the plan.md content first, then the tasks.json content.
+Clearly mark each section with:
+--- BEGIN plan.md ---
+<content>
+--- END plan.md ---
+
+--- BEGIN tasks.json ---
+<json content>
+--- END tasks.json ---
+`;
+  }
+
+  /**
+   * Parse agent output to extract plan and tasks.
+   * In live mode, fails with clear error if parsing fails (no silent fallback).
+   */
+  private parseAgentOutput(
+    output: string,
+    _projectName: string,
+  ): { plan: string; tasks: TaskList } {
+    // Try to extract marked sections
+    const planMatch = output.match(
+      /---\s*BEGIN plan\.md\s*---\n?([\s\S]*?)---\s*END plan\.md\s*---/i,
+    );
+    const tasksMatch = output.match(
+      /---\s*BEGIN tasks\.json\s*---\n?([\s\S]*?)---\s*END tasks\.json\s*---/i,
+    );
+
+    // Extract plan (use full output as fallback if no markers)
+    const plan = planMatch ? planMatch[1].trim() : output;
+
+    // Extract tasks - fail if not found or invalid
+    let tasks: TaskList;
+
+    if (tasksMatch) {
+      try {
+        tasks = JSON.parse(tasksMatch[1].trim()) as TaskList;
+        // Validate basic structure
+        if (!tasks.version || !Array.isArray(tasks.tasks)) {
+          throw new Error(
+            "Invalid TaskList structure: missing 'version' or 'tasks' array. " +
+              "Agent output did not match expected schema.",
+          );
+        }
+      } catch (err) {
+        const parseError = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `Failed to parse tasks.json from agent output: ${parseError}. ` +
+            `Output snippet: ${tasksMatch[1].slice(0, 200)}...`,
+        );
+      }
+    } else {
+      // Try to find JSON block in output
+      const jsonMatch = output.match(/```json\n?([\s\S]*?)```/);
+      if (jsonMatch) {
+        try {
+          tasks = JSON.parse(jsonMatch[1].trim()) as TaskList;
+          if (!tasks.version || !Array.isArray(tasks.tasks)) {
+            throw new Error("Invalid TaskList structure");
+          }
+        } catch (err) {
+          const parseError = err instanceof Error ? err.message : String(err);
+          throw new Error(
+            `Failed to parse JSON block as TaskList: ${parseError}. ` +
+              `JSON snippet: ${jsonMatch[1].slice(0, 200)}...`,
+          );
+        }
+      } else {
+        // No tasks found - fail with clear error
+        throw new Error(
+          "Failed to extract tasks.json from agent output. " +
+            "Expected format: '--- BEGIN tasks.json ---' ... '--- END tasks.json ---' " +
+            "or a ```json code block. " +
+            `Output length: ${output.length} chars, preview: ${output.slice(0, 300)}...`,
+        );
+      }
+    }
 
     return { plan, tasks };
   }

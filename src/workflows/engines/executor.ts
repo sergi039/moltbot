@@ -19,6 +19,13 @@ import type {
 import type { TaskList, Task } from "../types.js";
 import { loadArtifactJson, saveArtifact } from "../artifacts/store.js";
 import { TASKS_FILE, EXECUTION_REPORT_FILE, PLAN_FILE } from "../constants.js";
+import {
+  type EngineAgentRunner,
+  StubRunner,
+  createRunner,
+  generateSessionId,
+  mapAgentConfigToRunnerParams,
+} from "./runner.js";
 
 // ============================================================================
 // Executor Engine
@@ -29,12 +36,22 @@ export class ExecutorEngine implements WorkflowEngine {
   readonly name = "Task Executor";
 
   private options: ExecutorOptions;
+  private runner: EngineAgentRunner;
 
-  constructor(options: ExecutorOptions = {}) {
+  constructor(options: ExecutorOptions = {}, runner?: EngineAgentRunner) {
     this.options = {
       continueOnFailure: true,
       ...options,
     };
+    this.runner = runner ?? new StubRunner();
+  }
+
+  /**
+   * Check if live mode is enabled via workflow input context.
+   */
+  private isLiveMode(context: EngineContext): boolean {
+    const inputContext = context.run.input.context as Record<string, unknown> | undefined;
+    return inputContext?.live === true;
   }
 
   async validateInputs(context: EngineContext): Promise<{ valid: boolean; errors: string[] }> {
@@ -340,18 +357,151 @@ export class ExecutorEngine implements WorkflowEngine {
   // Task Execution
   // ==========================================================================
 
-  private async executeTask(task: Task, _context: EngineContext): Promise<TaskExecutionResult> {
-    // TODO: Integrate with runEmbeddedPiAgent() for real task execution
-    // For now, simulate task execution with a delay
+  private async executeTask(task: Task, context: EngineContext): Promise<TaskExecutionResult> {
+    // Use live mode if enabled
+    if (this.isLiveMode(context)) {
+      return this.executeTaskLive(task, context);
+    }
 
+    // Stub mode: simulate task execution with a delay
     await this.simulateWork(500 + Math.random() * 500);
 
-    // Stub: All tasks succeed in simulation mode
     return {
       success: true,
       summary: `Completed: ${task.title}`,
       filesChanged: [],
     };
+  }
+
+  /**
+   * Execute a task using real agent in live mode.
+   */
+  private async executeTaskLive(task: Task, context: EngineContext): Promise<TaskExecutionResult> {
+    // Use injected runner if available, otherwise create one for live mode
+    const runner =
+      this.runner instanceof StubRunner
+        ? createRunner({ live: true, artifactsDir: context.artifactsDir })
+        : this.runner;
+
+    // Build task-specific prompt
+    const prompt = this.buildTaskPrompt(task, context);
+
+    // Get agent config from phase
+    const agentParams = mapAgentConfigToRunnerParams(context.phase.agent);
+
+    // Generate session ID (include task id for uniqueness)
+    const sessionId = `${generateSessionId(context.run.id, context.phase.id, context.iteration)}-${task.id}`;
+
+    context.onProgress?.({
+      type: "status",
+      message: `Running live agent for task: ${task.title}`,
+    });
+
+    // Run the agent
+    const result = await runner.run({
+      sessionId,
+      prompt,
+      workspacePath: context.workspacePath,
+      timeoutMs: context.phase.settings.timeoutMs,
+      ...agentParams,
+      abortSignal: context.abortSignal,
+      onProgress: (msg) => {
+        context.onProgress?.({
+          type: "status",
+          message: msg.slice(0, 100),
+        });
+      },
+    });
+
+    if (!result.success) {
+      return {
+        success: false,
+        summary: `Failed: ${task.title}`,
+        filesChanged: [],
+        error: result.error,
+      };
+    }
+
+    // Parse the result to extract files changed
+    const filesChanged = this.parseFilesChanged(result.output);
+
+    return {
+      success: true,
+      summary: `Completed: ${task.title}`,
+      filesChanged,
+    };
+  }
+
+  /**
+   * Build prompt for task execution.
+   */
+  private buildTaskPrompt(task: Task, context: EngineContext): string {
+    const acceptanceCriteria = task.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join("\n");
+
+    const targetFiles = task.targetFiles?.length
+      ? `\n## Target Files\n${task.targetFiles.map((f) => `- ${f}`).join("\n")}`
+      : "";
+
+    return `# Execute Task: ${task.title}
+
+## Task ID
+${task.id}
+
+## Description
+${task.description}
+
+## Type
+${task.type}
+
+## Acceptance Criteria
+${acceptanceCriteria}
+${targetFiles}
+
+## Workspace
+${context.workspacePath}
+
+## Instructions
+
+1. Implement the task as described
+2. Follow existing code patterns and conventions
+3. Add appropriate error handling
+4. Write tests if this is a feature or bugfix
+5. Ensure TypeScript compiles without errors
+
+When complete, summarize what was done and list any files that were modified.
+
+Format your summary as:
+--- SUMMARY ---
+<brief description of changes>
+--- FILES CHANGED ---
+- path/to/file1.ts
+- path/to/file2.ts
+--- END ---
+`;
+  }
+
+  /**
+   * Parse files changed from agent output.
+   */
+  private parseFilesChanged(output: string): string[] {
+    const filesMatch = output.match(/---\s*FILES CHANGED\s*---\n?([\s\S]*?)---\s*END\s*---/i);
+
+    if (filesMatch) {
+      return filesMatch[1]
+        .split("\n")
+        .map((line) => line.replace(/^-\s*/, "").trim())
+        .filter((line) => line.length > 0);
+    }
+
+    // Fallback: look for file paths in the output
+    const filePatterns = output.match(
+      /(?:modified|created|updated|changed):\s*([^\s,]+\.[a-z]+)/gi,
+    );
+    if (filePatterns) {
+      return filePatterns.map((p) => p.split(/:\s*/)[1]);
+    }
+
+    return [];
   }
 
   private simulateWork(ms: number): Promise<void> {

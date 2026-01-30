@@ -1,9 +1,19 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { PlannerEngine, ExecutorEngine, ReviewerEngine, getEngine } from "./index.js";
+import {
+  PlannerEngine,
+  ExecutorEngine,
+  ReviewerEngine,
+  getEngine,
+  StubRunner,
+  createRunner,
+  generateSessionId,
+  mapAgentConfigToRunnerParams,
+  type EngineAgentRunner,
+} from "./index.js";
 import type { EngineContext, EngineProgressUpdate } from "./types.js";
 import type { WorkflowRun, PhaseDefinition, TaskList } from "../types.js";
 import { setWorkflowStoragePath } from "../state/persistence.js";
@@ -377,6 +387,315 @@ describe("Workflow Engines", () => {
       expect(typeof output.review.approved).toBe("boolean");
       expect(typeof output.review.overallScore).toBe("number");
       expect(Array.isArray(output.recommendations)).toBe(true);
+    });
+  });
+
+  // ==========================================================================
+  // Runner Tests
+  // ==========================================================================
+
+  describe("StubRunner", () => {
+    it("should return mock success after delay", async () => {
+      const runner = new StubRunner({ delayMs: 50 });
+
+      const result = await runner.run({
+        sessionId: "test-session",
+        prompt: "Test prompt",
+        workspacePath: "/tmp",
+        timeoutMs: 10000,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.output).toContain("Stub response");
+      expect(result.metrics.durationMs).toBeGreaterThanOrEqual(50);
+      expect(result.metrics.provider).toBe("stub");
+    });
+
+    it("should use custom mock response", async () => {
+      const customResponse = "Custom mock output";
+      const runner = new StubRunner({ delayMs: 10, mockResponse: customResponse });
+
+      const result = await runner.run({
+        sessionId: "test-session",
+        prompt: "Test prompt",
+        workspacePath: "/tmp",
+        timeoutMs: 10000,
+      });
+
+      expect(result.output).toBe(customResponse);
+    });
+
+    it("should handle abort signal", async () => {
+      const runner = new StubRunner({ delayMs: 5000 });
+      const controller = new AbortController();
+
+      const runPromise = runner.run({
+        sessionId: "test-session",
+        prompt: "Test prompt",
+        workspacePath: "/tmp",
+        timeoutMs: 10000,
+        abortSignal: controller.signal,
+      });
+
+      // Abort after 10ms
+      setTimeout(() => controller.abort(), 10);
+
+      await expect(runPromise).rejects.toThrow("Aborted");
+    });
+  });
+
+  describe("createRunner", () => {
+    it("should create StubRunner when live=false", () => {
+      const runner = createRunner({
+        live: false,
+        artifactsDir: "/tmp",
+      });
+
+      expect(runner).toBeInstanceOf(StubRunner);
+    });
+
+    it("should create LiveRunner when live=true", () => {
+      const runner = createRunner({
+        live: true,
+        artifactsDir: "/tmp",
+      });
+
+      // LiveRunner is not exported, check it's not a StubRunner
+      expect(runner).not.toBeInstanceOf(StubRunner);
+    });
+  });
+
+  describe("generateSessionId", () => {
+    it("should generate correct session ID format", () => {
+      const sessionId = generateSessionId("run123", "planning", 2);
+      expect(sessionId).toBe("wf-run123-planning-2");
+    });
+  });
+
+  describe("mapAgentConfigToRunnerParams", () => {
+    it("should map claude config correctly", () => {
+      const params = mapAgentConfigToRunnerParams({
+        type: "claude",
+        model: "claude-sonnet-4",
+      });
+
+      expect(params.provider).toBe("claude");
+      expect(params.model).toBe("claude-sonnet-4");
+    });
+
+    it("should map codex config correctly", () => {
+      const params = mapAgentConfigToRunnerParams({
+        type: "codex",
+        model: "gpt-4o",
+      });
+
+      expect(params.provider).toBe("codex");
+      expect(params.model).toBe("gpt-4o");
+    });
+  });
+
+  // ==========================================================================
+  // Live Mode Detection Tests
+  // ==========================================================================
+
+  describe("Live Mode Detection", () => {
+    it("should detect live mode in planner", async () => {
+      // Create a mock runner to verify it's called
+      const runFn = vi.fn().mockResolvedValue({
+        success: true,
+        output: `--- BEGIN plan.md ---
+# Test Plan
+--- END plan.md ---
+
+--- BEGIN tasks.json ---
+{
+  "version": "1.0",
+  "projectName": "test",
+  "createdAt": 0,
+  "updatedAt": 0,
+  "tasks": [],
+  "stats": { "total": 0, "pending": 0, "completed": 0, "failed": 0 }
+}
+--- END tasks.json ---`,
+        metrics: { durationMs: 100 },
+      });
+      const mockRunner: EngineAgentRunner = {
+        run: runFn,
+      };
+
+      const engine = new PlannerEngine({}, mockRunner);
+      const context = createTestContext();
+      context.run.input.context = { live: true };
+
+      await engine.execute(context);
+
+      // Verify the runner was called (live mode engaged)
+      expect(runFn).toHaveBeenCalled();
+    });
+
+    it("should not use runner when live mode is disabled", async () => {
+      const runFn = vi.fn();
+      const mockRunner: EngineAgentRunner = {
+        run: runFn,
+      };
+
+      const engine = new PlannerEngine({}, mockRunner);
+      const context = createTestContext();
+      // No live: true in context
+
+      await engine.execute(context);
+
+      // Runner should NOT be called in stub mode
+      expect(runFn).not.toHaveBeenCalled();
+    });
+  });
+
+  // ==========================================================================
+  // Engine with Mock Runner Tests
+  // ==========================================================================
+
+  describe("Engines with Mock Runner", () => {
+    it("PlannerEngine should produce valid TaskList with mock runner", async () => {
+      const mockTaskList: TaskList = {
+        version: "1.0",
+        projectName: "mock-project",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        tasks: [
+          {
+            id: "task-1",
+            title: "Mock task",
+            description: "A mock task",
+            type: "feature",
+            priority: 1,
+            complexity: 2,
+            status: "pending",
+            dependsOn: [],
+            acceptanceCriteria: ["Works correctly"],
+          },
+        ],
+        stats: { total: 1, pending: 1, completed: 0, failed: 0 },
+      };
+
+      const mockRunner: EngineAgentRunner = {
+        run: vi.fn().mockResolvedValue({
+          success: true,
+          output: `--- BEGIN plan.md ---
+# Mock Plan
+This is a mock plan.
+--- END plan.md ---
+
+--- BEGIN tasks.json ---
+${JSON.stringify(mockTaskList, null, 2)}
+--- END tasks.json ---`,
+          metrics: { durationMs: 100 },
+        }),
+      };
+
+      const engine = new PlannerEngine({}, mockRunner);
+      const context = createTestContext();
+      context.run.input.context = { live: true };
+
+      const result = await engine.execute(context);
+
+      expect(result.success).toBe(true);
+      const output = result.output as { tasks: TaskList };
+      expect(output.tasks.version).toBe("1.0");
+      expect(output.tasks.tasks).toHaveLength(1);
+      expect(output.tasks.tasks[0].title).toBe("Mock task");
+    });
+
+    it("ExecutorEngine should update tasks with mock runner", async () => {
+      // First set up planner output
+      const planner = new PlannerEngine();
+      const context = createTestContext();
+      await planner.execute(context);
+
+      // Set up executor with mock runner
+      const runFn = vi.fn().mockResolvedValue({
+        success: true,
+        output: `--- SUMMARY ---
+Implemented the task successfully.
+--- FILES CHANGED ---
+- src/index.ts
+- src/utils.ts
+--- END ---`,
+        metrics: { durationMs: 100 },
+      });
+      const mockRunner: EngineAgentRunner = {
+        run: runFn,
+      };
+
+      const executor = new ExecutorEngine({}, mockRunner);
+
+      // Update context for executor with live mode
+      context.phase = {
+        id: "execution",
+        name: "Task Execution",
+        engine: "executor",
+        agent: { type: "claude" },
+        inputArtifacts: [TASKS_FILE],
+        outputArtifacts: [TASKS_FILE, "execution-report.json"],
+        settings: { timeoutMs: 1800000, retries: 0 },
+      };
+      context.run.phaseHistory = [
+        {
+          phaseId: "planning",
+          iteration: 1,
+          status: "completed",
+          artifacts: ["plan.md", TASKS_FILE],
+          metrics: { durationMs: 1000 },
+          logPath: "phases/01-planning/logs",
+        },
+      ];
+      context.run.input.context = { live: true };
+
+      const result = await executor.execute(context);
+
+      expect(result.success).toBe(true);
+      // Runner should have been called for each task
+      expect(runFn).toHaveBeenCalled();
+    });
+
+    it("ReviewerEngine should produce valid ReviewResult with mock runner", async () => {
+      const mockReview = {
+        version: "1.0",
+        reviewedAt: Date.now(),
+        reviewer: "codex",
+        overallScore: 85,
+        approved: true,
+        summary: "Good code quality",
+        scores: {
+          architecture: 80,
+          codeQuality: 90,
+          testCoverage: 85,
+          security: 85,
+          documentation: 85,
+        },
+        issues: [],
+        recommendations: [],
+      };
+
+      const mockRunner: EngineAgentRunner = {
+        run: vi.fn().mockResolvedValue({
+          success: true,
+          output: `--- BEGIN review.json ---
+${JSON.stringify(mockReview, null, 2)}
+--- END review.json ---`,
+          metrics: { durationMs: 100 },
+        }),
+      };
+
+      const reviewer = new ReviewerEngine({}, mockRunner);
+      const context = createTestContext();
+      context.run.input.context = { live: true };
+
+      const result = await reviewer.execute(context);
+
+      expect(result.success).toBe(true);
+      const output = result.output as { review: { approved: boolean; overallScore: number } };
+      expect(output.review.approved).toBe(true);
+      expect(output.review.overallScore).toBe(85);
     });
   });
 });
