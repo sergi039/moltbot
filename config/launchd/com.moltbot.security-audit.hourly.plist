@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.moltbot.security-audit.hourly</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/ss/moltbot/scripts/run-security-audit.sh</string>
+        <string>--profile</string>
+        <string>dev</string>
+    </array>
+
+    <key>StartInterval</key>
+    <integer>3600</integer>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/moltbot-security-audit-hourly.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/moltbot-security-audit-hourly.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin</string>
+    </dict>
+</dict>
+</plist>
