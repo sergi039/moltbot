@@ -4,8 +4,13 @@
 #
 # Usage: ./scripts/restore-openclaw.sh [--profile dev|default] [--date YYYY-MM-DD]
 #
+# Security: All restored files get restrictive permissions (700/600)
+#
 
 set -euo pipefail
+
+# SECURITY: Set restrictive umask for all created files/directories
+umask 077
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -203,7 +208,20 @@ if [[ "$DRY_RUN" == "true" ]]; then
   exit 0
 fi
 
-# 5. Restart gateway
+# 5. Enforce secure permissions
+echo "=== Enforcing Secure Permissions ==="
+echo "Setting permissions (dirs=700, files=600)..."
+find "$OPENCLAW_DIR" -type d -exec chmod 700 {} \; 2>/dev/null || true
+find "$OPENCLAW_DIR" -type f -exec chmod 600 {} \; 2>/dev/null || true
+if [[ -d "$WORKFLOWS_DIR" ]]; then
+  find "$WORKFLOWS_DIR" -type d -exec chmod 700 {} \; 2>/dev/null || true
+  find "$WORKFLOWS_DIR" -type f -exec chmod 600 {} \; 2>/dev/null || true
+fi
+echo "✓ Permissions enforced"
+
+echo ""
+
+# 6. Restart gateway
 echo "=== Restarting Gateway ==="
 cd "$REPO_ROOT"
 

@@ -4,8 +4,13 @@
 #
 # Usage: ./scripts/backup-openclaw.sh [--profile dev|default] [--keep N]
 #
+# Security: All backups are created with restrictive permissions (700/600)
+#
 
 set -euo pipefail
+
+# SECURITY: Set restrictive umask for all created files/directories
+umask 077
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -147,6 +152,25 @@ if [[ -d "$PROFILE_BACKUP_DIR" ]]; then
     done
   else
     echo "  No rotation needed ($BACKUP_COUNT backups)"
+  fi
+fi
+
+echo ""
+
+# SECURITY: Enforce restrictive permissions on backup
+echo "Enforcing secure permissions..."
+find "$BACKUP_DIR" -type d -exec chmod 700 {} \;
+find "$BACKUP_DIR" -type f -exec chmod 600 {} \;
+chmod 700 "$PROFILE_BACKUP_DIR" "$BACKUP_BASE" 2>/dev/null || true
+echo "  ✓ Permissions set (dirs=700, files=600)"
+
+# SECURITY: Check source directory permissions
+if [[ -d "$OPENCLAW_DIR" ]]; then
+  SOURCE_PERMS=$(stat -f "%Lp" "$OPENCLAW_DIR" 2>/dev/null || stat -c "%a" "$OPENCLAW_DIR" 2>/dev/null)
+  if [[ "$SOURCE_PERMS" != "700" ]]; then
+    echo ""
+    echo "⚠ WARNING: Source directory $OPENCLAW_DIR has permissions $SOURCE_PERMS (should be 700)"
+    echo "  Run: chmod 700 $OPENCLAW_DIR"
   fi
 fi
 
