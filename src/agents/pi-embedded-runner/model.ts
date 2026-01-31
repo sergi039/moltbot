@@ -1,10 +1,5 @@
 import type { Api, Model } from "@mariozechner/pi-ai";
-import {
-  discoverAuthStorage,
-  discoverModels,
-  type AuthStorage,
-  type ModelRegistry,
-} from "../pi-model-discovery.js";
+import { discoverAuthStorage, discoverModels } from "@mariozechner/pi-coding-agent";
 
 import type { OpenClawConfig } from "../../config/config.js";
 import type { ModelDefinitionConfig } from "../../config/types.js";
@@ -58,8 +53,8 @@ export function resolveModel(
 ): {
   model?: Model<Api>;
   error?: string;
-  authStorage: AuthStorage;
-  modelRegistry: ModelRegistry;
+  authStorage: ReturnType<typeof discoverAuthStorage>;
+  modelRegistry: ReturnType<typeof discoverModels>;
 } {
   const resolvedAgentDir = agentDir ?? resolveOpenClawAgentDir();
   const authStorage = discoverAuthStorage(resolvedAgentDir);

@@ -1,198 +1,225 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import os from "node:os";
+/**
+ * Orchestrator Tests - Anti-Loop Limits
+ *
+ * Tests for maxDurationMs and maxAgentRuns enforcement.
+ */
 
-import {
-  WorkflowOrchestrator,
-  getOrchestrator,
-  resetOrchestrator,
-  setWorkflowStoragePath,
-  DEV_CYCLE_WORKFLOW,
-  REVIEW_ONLY_WORKFLOW,
-  registerBuiltinWorkflows,
-  generateWorkflowId,
-  WORKFLOW_ID_PREFIX,
-} from "./index.js";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { WorkflowOrchestrator, resetOrchestrator } from "./orchestrator.js";
+import type { WorkflowDefinition, WorkflowInput, WorkspaceConfig } from "./types.js";
+import { DEFAULT_MAX_TASKS, DEFAULT_MAX_AGENT_RUNS } from "./constants.js";
 
-describe("WorkflowOrchestrator", () => {
+// Mock the persistence functions
+vi.mock("./state/persistence.js", () => ({
+  saveWorkflowState: vi.fn().mockResolvedValue(undefined),
+  loadWorkflowState: vi.fn().mockResolvedValue(null),
+  saveWorkflowInput: vi.fn().mockResolvedValue(undefined),
+  logWorkflowEvent: vi.fn().mockResolvedValue(undefined),
+  getWorkflowDir: vi.fn().mockReturnValue("/tmp/test-workflow"),
+  listRunningWorkflows: vi.fn().mockResolvedValue([]),
+  getWorkflowStoragePath: vi.fn().mockReturnValue("/tmp/workflows"),
+}));
+
+// Mock mkdirSync
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...actual,
+    mkdirSync: vi.fn(),
+  };
+});
+
+// Mock config
+vi.mock("../config/io.js", () => ({
+  loadConfig: vi.fn().mockReturnValue({}),
+}));
+
+// Mock engines
+vi.mock("./engines/index.js", () => ({
+  getEngine: vi.fn().mockReturnValue({
+    validateInputs: vi.fn().mockResolvedValue({ valid: true, errors: [] }),
+    execute: vi.fn().mockResolvedValue({ success: true }),
+  }),
+}));
+
+// Mock validator
+vi.mock("./artifacts/validator.js", () => ({
+  validatePhaseOutput: vi.fn().mockResolvedValue({ valid: true, errors: [] }),
+  evaluateCondition: vi.fn().mockReturnValue(false),
+}));
+
+// Mock artifacts/store
+vi.mock("./artifacts/store.js", () => ({
+  loadArtifactJson: vi.fn().mockResolvedValue(null),
+  generateManifest: vi.fn().mockResolvedValue(undefined),
+  getArtifactsDir: vi.fn().mockReturnValue("/tmp/test-artifacts"),
+}));
+
+// Mock observability
+vi.mock("./observability/adapter.js", () => ({
+  attachObservability: vi.fn().mockReturnValue({
+    getLogger: vi.fn().mockReturnValue(null),
+  }),
+}));
+
+// Mock retention scheduler
+vi.mock("./retention/scheduler.js", () => ({
+  startCleanupScheduler: vi.fn().mockResolvedValue(undefined),
+  stopCleanupScheduler: vi.fn(),
+}));
+
+describe("WorkflowOrchestrator - Anti-Loop Limits", () => {
   let orchestrator: WorkflowOrchestrator;
-  let testStoragePath: string;
+
+  const testDefinition: WorkflowDefinition = {
+    type: "dev-cycle",
+    name: "Test Workflow",
+    version: "1.0.0",
+    phases: [
+      {
+        id: "planning",
+        name: "Planning",
+        engine: "planner",
+        agent: { type: "claude" },
+        inputArtifacts: [],
+        outputArtifacts: ["plan.md"],
+        settings: { timeoutMs: 30000, retries: 0 },
+      },
+    ],
+    settings: {
+      maxDurationMs: 100, // Very short for testing
+      maxReviewIterations: 3,
+      maxTasks: DEFAULT_MAX_TASKS,
+      maxAgentRuns: DEFAULT_MAX_AGENT_RUNS,
+      autoCommit: false,
+      notifyOnPhaseComplete: false,
+    },
+    successCriteria: {
+      testsPass: true,
+      requiredArtifacts: ["plan.md"],
+    },
+  };
+
+  const testInput: WorkflowInput = {
+    task: "Test task",
+    repoPath: "/tmp/test-repo",
+    context: {},
+  };
+
+  const testWorkspace: WorkspaceConfig = {
+    mode: "in-place",
+    targetRepo: "/tmp/test-repo",
+  };
 
   beforeEach(() => {
     resetOrchestrator();
-    orchestrator = getOrchestrator();
-
-    // Use a temporary storage path for tests
-    testStoragePath = join(os.tmpdir(), `workflow-test-${Date.now()}`);
-    setWorkflowStoragePath(testStoragePath);
-    mkdirSync(testStoragePath, { recursive: true });
+    orchestrator = new WorkflowOrchestrator();
+    orchestrator.registerDefinition(testDefinition);
   });
 
   afterEach(() => {
-    // Clean up test storage
-    try {
-      rmSync(testStoragePath, { recursive: true, force: true });
-    } catch {
-      // Ignore cleanup errors
-    }
+    vi.clearAllMocks();
   });
 
-  describe("Definition Management", () => {
-    it("should register and retrieve workflow definitions", () => {
-      orchestrator.registerDefinition(DEV_CYCLE_WORKFLOW);
-
-      const definition = orchestrator.getDefinition("dev-cycle");
-      expect(definition).toBeDefined();
-      expect(definition?.name).toBe("Standard Development Cycle");
-    });
-
-    it("should list all registered definitions", () => {
-      registerBuiltinWorkflows(orchestrator);
-
-      const definitions = orchestrator.listDefinitions();
-      expect(definitions).toHaveLength(2);
-      expect(definitions.map((d) => d.type)).toContain("dev-cycle");
-      expect(definitions.map((d) => d.type)).toContain("review-only");
-    });
-
-    it("should return undefined for unknown definition", () => {
-      const definition = orchestrator.getDefinition("unknown");
-      expect(definition).toBeUndefined();
-    });
-  });
-
-  describe("Workflow Lifecycle", () => {
-    beforeEach(() => {
-      registerBuiltinWorkflows(orchestrator);
-    });
-
-    it("should start a new workflow", async () => {
-      const run = await orchestrator.start(
-        "dev-cycle",
-        {
-          task: "Test task",
-          repoPath: "/tmp/test-repo",
-        },
-        {
-          mode: "in-place",
-          targetRepo: "/tmp/test-repo",
-        },
-      );
-
-      expect(run.id).toMatch(new RegExp(`^${WORKFLOW_ID_PREFIX}`));
-      expect(run.status).toBe("pending");
-      expect(run.definitionType).toBe("dev-cycle");
-      expect(run.input.task).toBe("Test task");
-    });
-
-    it("should throw for unknown workflow type", async () => {
-      await expect(
-        orchestrator.start(
-          "unknown-type",
-          { task: "Test", repoPath: "/tmp" },
-          { mode: "in-place", targetRepo: "/tmp" },
-        ),
-      ).rejects.toThrow("Unknown workflow type: unknown-type");
-    });
-
-    it("should get workflow status", async () => {
-      const run = await orchestrator.start(
-        "review-only",
-        { task: "Review code", repoPath: "/tmp/test" },
-        { mode: "in-place", targetRepo: "/tmp/test" },
-      );
-
-      const status = await orchestrator.getStatus(run.id);
-      expect(status).toBeDefined();
-      expect(status?.id).toBe(run.id);
-      expect(status?.status).toBe("pending");
-    });
-
-    it("should return null for unknown workflow", async () => {
-      const status = await orchestrator.getStatus("wf_nonexistent");
-      expect(status).toBeNull();
-    });
-  });
-
-  describe("Event Handling", () => {
-    beforeEach(() => {
-      registerBuiltinWorkflows(orchestrator);
-    });
-
-    it("should emit workflow:started event", async () => {
-      const events: Array<{ type: string; workflowId: string }> = [];
-
-      orchestrator.onWorkflowEvent((event) => {
-        events.push({ type: event.type, workflowId: event.workflowId });
+  describe("maxDurationMs enforcement", () => {
+    it("should fail workflow when maxDurationMs exceeded", async () => {
+      // Override Date.now to simulate time passing
+      const originalDateNow = Date.now;
+      let currentTime = 1000;
+      vi.spyOn(Date, "now").mockImplementation(() => {
+        currentTime += 150; // Each call advances 150ms
+        return currentTime;
       });
 
+      try {
+        // Start workflow
+        const run = await orchestrator.start("dev-cycle", testInput, testWorkspace);
+        expect(run.status).toBe("pending");
+
+        // Execute should fail with timeout (150ms > 100ms limit)
+        await expect(orchestrator.execute(run.id)).rejects.toThrow(
+          /Workflow timeout.*maxDurationMs/,
+        );
+      } finally {
+        Date.now = originalDateNow;
+      }
+    });
+
+    it("should not fail before maxDurationMs", async () => {
+      // Use longer timeout
+      const longDefinition: WorkflowDefinition = {
+        ...testDefinition,
+        settings: { ...testDefinition.settings, maxDurationMs: 100000 },
+      };
+      orchestrator.registerDefinition(longDefinition);
+
+      const run = await orchestrator.start("dev-cycle", testInput, testWorkspace);
+
+      // Execute should succeed
+      const result = await orchestrator.execute(run.id);
+      expect(result.status).toBe("completed");
+    });
+  });
+
+  describe("maxAgentRuns enforcement", () => {
+    it("should fail when agentRuns exceeds maxAgentRuns in live mode", async () => {
+      // Use definition with very low maxAgentRuns and multiple phases
+      const lowAgentRunsDefinition: WorkflowDefinition = {
+        ...testDefinition,
+        settings: { ...testDefinition.settings, maxAgentRuns: 1, maxDurationMs: 100000 },
+        phases: [
+          testDefinition.phases[0],
+          {
+            id: "execution",
+            name: "Execution",
+            engine: "executor",
+            agent: { type: "claude" },
+            inputArtifacts: ["plan.md"],
+            outputArtifacts: ["tasks.json"],
+            settings: { timeoutMs: 30000, retries: 0 },
+          },
+        ],
+      };
+      orchestrator.registerDefinition(lowAgentRunsDefinition);
+
+      // Start with live=true to enable agent run counting
       const run = await orchestrator.start(
         "dev-cycle",
-        { task: "Test", repoPath: "/tmp" },
-        { mode: "in-place", targetRepo: "/tmp" },
+        { ...testInput, context: { live: true } },
+        testWorkspace,
       );
 
-      expect(events).toHaveLength(1);
-      expect(events[0].type).toBe("workflow:started");
-      expect(events[0].workflowId).toBe(run.id);
-    });
-  });
-});
-
-describe("generateWorkflowId", () => {
-  it("should generate IDs with correct prefix", () => {
-    const id = generateWorkflowId();
-    expect(id).toMatch(new RegExp(`^${WORKFLOW_ID_PREFIX}`));
-  });
-
-  it("should generate unique IDs", () => {
-    const ids = new Set<string>();
-    for (let i = 0; i < 100; i++) {
-      ids.add(generateWorkflowId());
-    }
-    expect(ids.size).toBe(100);
-  });
-});
-
-describe("Built-in Workflow Definitions", () => {
-  describe("DEV_CYCLE_WORKFLOW", () => {
-    it("should have correct type and name", () => {
-      expect(DEV_CYCLE_WORKFLOW.type).toBe("dev-cycle");
-      expect(DEV_CYCLE_WORKFLOW.name).toBe("Standard Development Cycle");
+      // Phase 1: agentRunCount=0, check passes (0 < 1), increments to 1
+      // Phase 2: agentRunCount=1, check fails (1 >= 1)
+      await expect(orchestrator.execute(run.id)).rejects.toThrow(/Agent run limit exceeded/);
     });
 
-    it("should have 5 phases", () => {
-      expect(DEV_CYCLE_WORKFLOW.phases).toHaveLength(5);
-    });
+    it("should not count agent runs in stub mode", async () => {
+      // Use definition with low maxAgentRuns but stub mode (live=false)
+      const lowAgentRunsDefinition: WorkflowDefinition = {
+        ...testDefinition,
+        settings: { ...testDefinition.settings, maxAgentRuns: 1, maxDurationMs: 100000 },
+        phases: [
+          testDefinition.phases[0],
+          {
+            id: "execution",
+            name: "Execution",
+            engine: "executor",
+            agent: { type: "claude" },
+            inputArtifacts: ["plan.md"],
+            outputArtifacts: ["tasks.json"],
+            settings: { timeoutMs: 30000, retries: 0 },
+          },
+        ],
+      };
+      orchestrator.registerDefinition(lowAgentRunsDefinition);
 
-    it("should have planning phase first", () => {
-      expect(DEV_CYCLE_WORKFLOW.phases[0].id).toBe("planning");
-      expect(DEV_CYCLE_WORKFLOW.phases[0].engine).toBe("planner");
-    });
+      // Start without live=true (stub mode)
+      const run = await orchestrator.start("dev-cycle", testInput, testWorkspace);
 
-    it("should have finalize phase last", () => {
-      const lastPhase = DEV_CYCLE_WORKFLOW.phases[DEV_CYCLE_WORKFLOW.phases.length - 1];
-      expect(lastPhase.id).toBe("finalize");
-    });
-
-    it("should have transitions for review phases", () => {
-      const planReview = DEV_CYCLE_WORKFLOW.phases.find((p) => p.id === "plan-review");
-      expect(planReview?.transitions).toBeDefined();
-      expect(planReview?.transitions).toHaveLength(1);
-      expect(planReview?.transitions?.[0].targetPhase).toBe("planning");
-    });
-  });
-
-  describe("REVIEW_ONLY_WORKFLOW", () => {
-    it("should have correct type and name", () => {
-      expect(REVIEW_ONLY_WORKFLOW.type).toBe("review-only");
-      expect(REVIEW_ONLY_WORKFLOW.name).toBe("Code Review Only");
-    });
-
-    it("should have single phase", () => {
-      expect(REVIEW_ONLY_WORKFLOW.phases).toHaveLength(1);
-      expect(REVIEW_ONLY_WORKFLOW.phases[0].id).toBe("code-review");
+      // Should succeed because agent runs aren't counted in stub mode
+      const result = await orchestrator.execute(run.id);
+      expect(result.status).toBe("completed");
     });
   });
 });

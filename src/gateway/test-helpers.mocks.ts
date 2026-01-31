@@ -227,25 +227,20 @@ export const testIsNixMode = hoisted.testIsNixMode;
 export const sessionStoreSaveDelayMs = hoisted.sessionStoreSaveDelayMs;
 export const embeddedRunMock = hoisted.embeddedRunMock;
 
-vi.mock("../agents/pi-model-discovery.js", async () => {
-  const actual = await vi.importActual<typeof import("../agents/pi-model-discovery.js")>(
-    "../agents/pi-model-discovery.js",
+vi.mock("@mariozechner/pi-coding-agent", async () => {
+  const actual = await vi.importActual<typeof import("@mariozechner/pi-coding-agent")>(
+    "@mariozechner/pi-coding-agent",
   );
-
-  class MockModelRegistry extends actual.ModelRegistry {
-    override getAll(): ReturnType<typeof actual.ModelRegistry.prototype.getAll> {
-      if (!piSdkMock.enabled) {
-        return super.getAll();
-      }
-      piSdkMock.discoverCalls += 1;
-      // Cast to expected type for testing purposes
-      return piSdkMock.models as ReturnType<typeof actual.ModelRegistry.prototype.getAll>;
-    }
-  }
 
   return {
     ...actual,
-    ModelRegistry: MockModelRegistry,
+    discoverModels: (...args: unknown[]) => {
+      if (!piSdkMock.enabled) {
+        return (actual.discoverModels as (...args: unknown[]) => unknown)(...args);
+      }
+      piSdkMock.discoverCalls += 1;
+      return piSdkMock.models;
+    },
   };
 });
 
