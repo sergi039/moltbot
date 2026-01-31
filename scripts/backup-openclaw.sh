@@ -99,7 +99,25 @@ else
   echo "  ⚠ Skills directory not found"
 fi
 
-# 4. Backup workflows (if exists)
+# 4. Backup .env (if exists)
+if [[ -f "$OPENCLAW_DIR/.env" ]]; then
+  echo "Backing up .env..."
+  cp "$OPENCLAW_DIR/.env" "$BACKUP_DIR/"
+  echo "  ✓ .env"
+else
+  echo "  ⚠ .env not found (optional)"
+fi
+
+# 5. Backup token files (telegram, etc.)
+if [[ -d "$OPENCLAW_DIR/telegram" ]]; then
+  echo "Backing up telegram tokens..."
+  cp -R "$OPENCLAW_DIR/telegram" "$BACKUP_DIR/"
+  echo "  ✓ telegram/"
+else
+  echo "  ⚠ Telegram directory not found (optional)"
+fi
+
+# 6. Backup workflows (if exists)
 if [[ -d "$WORKFLOWS_DIR" ]]; then
   echo "Backing up workflows..."
   cp -R "$WORKFLOWS_DIR" "$BACKUP_DIR/"

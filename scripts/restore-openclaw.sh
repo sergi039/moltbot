@@ -185,7 +185,34 @@ else
   echo "  ⚠ Skills not in backup"
 fi
 
-# 4. Restore workflows (optional)
+# 4. Restore .env (if in backup)
+if [[ -f "$BACKUP_DIR/.env" ]]; then
+  echo "Restoring .env..."
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "  [dry-run] Would copy .env to $OPENCLAW_DIR/"
+  else
+    cp "$BACKUP_DIR/.env" "$OPENCLAW_DIR/"
+    echo "  ✓ .env"
+  fi
+else
+  echo "  ⚠ .env not in backup (optional)"
+fi
+
+# 5. Restore telegram tokens (if in backup)
+if [[ -d "$BACKUP_DIR/telegram" ]]; then
+  echo "Restoring telegram tokens..."
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "  [dry-run] Would copy telegram/ to $OPENCLAW_DIR/"
+  else
+    rm -rf "$OPENCLAW_DIR/telegram"
+    cp -R "$BACKUP_DIR/telegram" "$OPENCLAW_DIR/"
+    echo "  ✓ telegram/"
+  fi
+else
+  echo "  ⚠ Telegram not in backup (optional)"
+fi
+
+# 6. Restore workflows (optional)
 if [[ -d "$BACKUP_DIR/workflows" ]]; then
   echo "Restoring workflows..."
   if [[ "$DRY_RUN" == "true" ]]; then
