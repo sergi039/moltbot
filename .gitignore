@@ -71,3 +71,14 @@ USER.md
 
 # local tooling
 .serena/
+results/
+
+# Backups with sensitive data
+Backups/
+~/Backups/
+
+# Local config with credentials (NEVER COMMIT)
+**/openclaw.json
+**/moltbot.json
+*.credentials
+*.secret

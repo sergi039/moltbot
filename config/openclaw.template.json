@@ -1,0 +1,99 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.1.29",
+    "lastTouchedAt": "2026-01-31T10:00:00.000Z"
+  },
+  "env": {
+    "ANTHROPIC_API_KEY": "sk-ant-xxx-YOUR-KEY-HERE",
+    "OPENAI_API_KEY": "sk-proj-xxx-YOUR-KEY-HERE",
+    "GOOGLE_PLACES_API_KEY": "AIzaSy-YOUR-KEY-HERE",
+    "OBSIDIAN_API_KEY": "YOUR-OBSIDIAN-KEY-HERE"
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "/path/to/your/workspace",
+      "skipBootstrap": true,
+      "contextPruning": {
+        "mode": "cache-ttl",
+        "ttl": "1h"
+      },
+      "compaction": {
+        "mode": "safeguard"
+      },
+      "heartbeat": {
+        "every": "30m"
+      },
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      }
+    },
+    "list": [
+      {
+        "id": "dev",
+        "default": true,
+        "workspace": "/path/to/your/workspace",
+        "identity": {
+          "name": "YourBotName",
+          "theme": "your theme",
+          "emoji": "🤖"
+        }
+      }
+    ]
+  },
+  "tools": {
+    "deny": ["browser"],
+    "exec": {
+      "host": "gateway",
+      "security": "full"
+    },
+    "media": {
+      "audio": {
+        "enabled": true,
+        "models": [
+          {
+            "type": "provider",
+            "provider": "openai",
+            "model": "whisper-1"
+          }
+        ]
+      }
+    }
+  },
+  "messages": {
+    "ackReactionScope": "group-mentions"
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto"
+  },
+  "approvals": {
+    "exec": {
+      "enabled": true,
+      "mode": "session"
+    }
+  },
+  "channels": {
+    "telegram": {
+      "dmPolicy": "pairing",
+      "botToken": "YOUR-TELEGRAM-BOT-TOKEN",
+      "allowFrom": [123456789],
+      "groupPolicy": "allowlist",
+      "streamMode": "partial"
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "token": "YOUR-GATEWAY-TOKEN"
+    }
+  },
+  "plugins": {
+    "entries": {
+      "telegram": {
+        "enabled": true
+      }
+    }
+  }
+}
