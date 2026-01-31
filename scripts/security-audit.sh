@@ -273,6 +273,117 @@ done
 echo ""
 
 # ============================================================================
+# 6. SKILLS SECURITY AUDIT
+# ============================================================================
+echo "═══════════════════════════════════════════════════════════════"
+echo "6. SKILLS SECURITY AUDIT"
+echo "═══════════════════════════════════════════════════════════════"
+
+# Dangerous patterns to check in skills scripts
+DANGEROUS_PATTERNS=(
+  # Shell injection / remote code execution
+  'curl.*\|.*bash'
+  'curl.*\|.*sh'
+  'wget.*\|.*bash'
+  'wget.*\|.*sh'
+  # Destructive commands
+  'rm -rf /'
+  'rm -rf ~'
+  'rm -rf \$HOME'
+  'mkfs\.'
+  'dd if='
+  ':\(\)\{.*:\|:&.*\};:'  # fork bomb
+  # Privilege escalation
+  'chmod 777'
+  'chown root'
+  'setcap'
+  # Secrets access from skills (should use env vars instead)
+  '\.openclaw/\.env'
+  'auth-profiles\.json'
+  'oauth\.json'
+  '\.openclaw.*/openclaw\.json'
+)
+
+# Patterns that require sudo (warning, not critical)
+SUDO_PATTERNS=(
+  'sudo '
+)
+
+SKILLS_DIR="$REPO_ROOT/skills"
+RUNTIME_SKILLS_DIR="$OPENCLAW_DIR/skills"
+
+skills_issues=0
+skills_warnings=0
+
+scan_skills_dir() {
+  local dir="$1"
+  local label="$2"
+
+  if [[ ! -d "$dir" ]]; then
+    echo -e "  ${YELLOW}SKIP${NC} $label not found"
+    return
+  fi
+
+  echo "  Scanning $label..."
+
+  # Scan scripts
+  while IFS= read -r -d '' script_file; do
+    for pattern in "${DANGEROUS_PATTERNS[@]}"; do
+      if grep -qE "$pattern" "$script_file" 2>/dev/null; then
+        echo -e "    ${RED}FAIL${NC} Dangerous pattern in: $script_file"
+        echo -e "         Pattern: $pattern"
+        ((skills_issues++))
+      fi
+    done
+
+    for pattern in "${SUDO_PATTERNS[@]}"; do
+      if grep -qE "$pattern" "$script_file" 2>/dev/null; then
+        echo -e "    ${YELLOW}WARN${NC} sudo usage in: $script_file"
+        ((skills_warnings++))
+      fi
+    done
+  done < <(find "$dir" -type f \( -name "*.sh" -o -name "*.py" -o -name "*.js" -o -name "*.ts" \) -print0 2>/dev/null)
+
+  # Scan SKILL.md files for dangerous executable instructions (not config references)
+  # Only check for actual dangerous commands, not documentation about config paths
+  DANGEROUS_DOC_PATTERNS=(
+    'curl.*\|.*bash'
+    'curl.*\|.*sh'
+    'wget.*\|.*bash'
+    'wget.*\|.*sh'
+    'rm -rf /'
+    'rm -rf ~'
+    ':\(\)\{.*:\|:&.*\};:'
+  )
+  while IFS= read -r -d '' skill_md; do
+    for pattern in "${DANGEROUS_DOC_PATTERNS[@]}"; do
+      if grep -qE "$pattern" "$skill_md" 2>/dev/null; then
+        echo -e "    ${YELLOW}WARN${NC} Dangerous pattern in docs: $skill_md"
+        echo -e "         Pattern: $pattern"
+        ((skills_warnings++))
+      fi
+    done
+  done < <(find "$dir" -type f -name "SKILL.md" -print0 2>/dev/null)
+}
+
+# Scan both repo skills and runtime skills
+scan_skills_dir "$SKILLS_DIR" "Repository skills ($SKILLS_DIR)"
+scan_skills_dir "$RUNTIME_SKILLS_DIR" "Runtime skills ($RUNTIME_SKILLS_DIR)"
+
+if [[ "$skills_issues" -eq 0 && "$skills_warnings" -eq 0 ]]; then
+  echo -e "  ${GREEN}PASS${NC} No dangerous patterns found in skills"
+elif [[ "$skills_issues" -eq 0 ]]; then
+  echo -e "  ${YELLOW}PASS with warnings${NC} ($skills_warnings warnings)"
+  ((WARNINGS += skills_warnings))
+else
+  echo -e "  ${RED}FAIL${NC} Found $skills_issues dangerous patterns"
+  ((CRITICAL_ISSUES += skills_issues))
+  ((WARNINGS += skills_warnings))
+fi
+
+echo ""
+
+# ============================================================================
 # SUMMARY
 # ============================================================================
 echo "╔══════════════════════════════════════════════════════════════╗"
