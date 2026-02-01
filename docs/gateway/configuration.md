@@ -2970,6 +2970,7 @@ Trusted proxies:
 - `gateway.trustedProxies`: list of reverse proxy IPs that terminate TLS in front of the Gateway.
 - When a connection comes from one of these IPs, OpenClaw uses `x-forwarded-for` (or `x-real-ip`) to determine the client IP for local pairing checks and HTTP auth/local checks.
 - Only list proxies you fully control, and ensure they **overwrite** incoming `x-forwarded-for`.
+- **Note:** only exact IPs are supported. Wildcards (`*`) and CIDR notation are ignored. If you configure a reverse proxy, list its exact IP(s).
 
 Notes:
 

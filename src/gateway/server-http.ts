@@ -1,3 +1,5 @@
+import type { TlsOptions } from "node:tls";
+import type { WebSocketServer } from "ws";
 import {
   createServer as createHttpServer,
   type Server as HttpServer,
@@ -5,15 +7,14 @@ import {
   type ServerResponse,
 } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
-import type { TlsOptions } from "node:tls";
-import type { WebSocketServer } from "ws";
-import { handleA2uiHttpRequest } from "../canvas-host/a2ui.js";
 import type { CanvasHostHandler } from "../canvas-host/server.js";
-import { loadConfig } from "../config/config.js";
-import type { createSubsystemLogger } from "../logging/subsystem.js";
-import { handleSlackHttpRequest } from "../slack/http/index.js";
 import { resolveAgentAvatar } from "../agents/identity-avatar.js";
+import { handleA2uiHttpRequest } from "../canvas-host/a2ui.js";
+import { loadConfig } from "../config/config.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
+import { handleSlackHttpRequest } from "../slack/http/index.js";
 import { handleControlUiAvatarRequest, handleControlUiHttpRequest } from "./control-ui.js";
+import { applyHookMappings } from "./hooks-mapping.js";
 import {
   extractHookToken,
   getHookChannelError,
@@ -26,13 +27,14 @@ import {
   resolveHookChannel,
   resolveHookDeliver,
 } from "./hooks.js";
-import { applyHookMappings } from "./hooks-mapping.js";
 import { handleMemoryHttpRequest } from "./memory-http.js";
 import { handleOpenAiHttpRequest } from "./openai-http.js";
 import { handleOpenResponsesHttpRequest } from "./openresponses-http.js";
 import { handleToolsInvokeHttpRequest } from "./tools-invoke-http.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
+const logger = createSubsystemLogger("gateway-http");
+let trustedProxyWarningShown = false;
 
 type HookDispatchers = {
   dispatchWakeHook: (value: { text: string; mode: "now" | "next-heartbeat" }) => void;
@@ -239,6 +241,18 @@ export function createGatewayHttpServer(opts: {
     try {
       const configSnapshot = loadConfig();
       const trustedProxies = configSnapshot.gateway?.trustedProxies ?? [];
+      if (!trustedProxyWarningShown) {
+        const risky = trustedProxies.find(
+          (proxy) => proxy === "*" || proxy.includes("/") || proxy === "0.0.0.0" || proxy === "::",
+        );
+        if (risky) {
+          trustedProxyWarningShown = true;
+          logger.warn(
+            `gateway.trustedProxies contains wildcard/CIDR (${risky}). ` +
+              `Only exact IPs are supported; proxy headers may be ignored or misused.`,
+          );
+        }
+      }
       if (await handleHooksRequest(req, res)) return;
       if (
         await handleMemoryHttpRequest(req, res, {
