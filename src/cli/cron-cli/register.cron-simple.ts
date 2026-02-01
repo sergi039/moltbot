@@ -87,23 +87,32 @@ export function registerCronSimpleCommands(cron: Command) {
       }),
   );
 
-  addGatewayClientOptions(
-    cron
-      .command("run")
-      .description("Run a cron job now (debug)")
-      .argument("<id>", "Job id")
-      .option("--force", "Run even if not due", false)
-      .action(async (id, opts) => {
-        try {
-          const res = await callGatewayFromCli("cron.run", opts, {
-            id,
-            mode: opts.force ? "force" : "due",
-          });
-          defaultRuntime.log(JSON.stringify(res, null, 2));
-        } catch (err) {
-          defaultRuntime.error(danger(String(err)));
-          defaultRuntime.exit(1);
+  // cron run needs longer timeout (60s default) since jobs can take time
+  cron
+    .command("run")
+    .description("Run a cron job now (debug)")
+    .argument("<id>", "Job id")
+    .option("--force", "Run even if not due", false)
+    .option("--url <url>", "Gateway WebSocket URL")
+    .option("--token <token>", "Gateway token (if required)")
+    .option("--timeout <ms>", "Timeout in ms (default 60000 for cron jobs)", "60000")
+    .action(async (id, opts) => {
+      try {
+        const res = await callGatewayFromCli("cron.run", opts, {
+          id,
+          mode: opts.force ? "force" : "due",
+        });
+        defaultRuntime.log(JSON.stringify(res, null, 2));
+      } catch (err) {
+        const msg = String(err);
+        if (msg.includes("timeout")) {
+          defaultRuntime.error(
+            danger(`${msg}\nHint: Job may still be running. Try --timeout 120000 for long jobs.`),
+          );
+        } else {
+          defaultRuntime.error(danger(msg));
         }
-      }),
-  );
+        defaultRuntime.exit(1);
+      }
+    });
 }
