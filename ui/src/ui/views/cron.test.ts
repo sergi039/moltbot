@@ -97,4 +97,88 @@ describe("cron view", () => {
     expect(onLoadRuns).toHaveBeenCalledTimes(1);
     expect(onLoadRuns).toHaveBeenCalledWith("job-1");
   });
+
+  // P1: Silent job hint
+  it("shows silent hint for jobs with deliver:false", () => {
+    const container = document.createElement("div");
+    const silentJob: CronJob = {
+      id: "silent-job",
+      name: "Silent checker",
+      enabled: true,
+      createdAtMs: 0,
+      updatedAtMs: 0,
+      schedule: { kind: "cron", expr: "0 * * * *" },
+      sessionTarget: "isolated",
+      wakeMode: "now",
+      payload: { kind: "agentTurn", message: "Check silently", deliver: false },
+    };
+    render(renderCron(createProps({ jobs: [silentJob] })), container);
+
+    expect(container.textContent).toContain("Silent");
+    expect(container.textContent).toContain("no output unless thresholds");
+  });
+
+  it("does not show silent hint for jobs with deliver:true", () => {
+    const container = document.createElement("div");
+    const deliverJob: CronJob = {
+      id: "deliver-job",
+      name: "Normal job",
+      enabled: true,
+      createdAtMs: 0,
+      updatedAtMs: 0,
+      schedule: { kind: "cron", expr: "0 * * * *" },
+      sessionTarget: "main",
+      wakeMode: "now",
+      payload: { kind: "agentTurn", message: "Normal message", deliver: true },
+    };
+    render(renderCron(createProps({ jobs: [deliverJob] })), container);
+
+    expect(container.textContent).not.toContain("Silent");
+  });
+
+  // P2: No runs yet indicator
+  it("shows 'No runs yet' with next run time when runs are empty", () => {
+    const container = document.createElement("div");
+    const job: CronJob = {
+      id: "new-job",
+      name: "New job",
+      enabled: true,
+      createdAtMs: 0,
+      updatedAtMs: 0,
+      schedule: { kind: "cron", expr: "0 9 * * *" },
+      sessionTarget: "main",
+      wakeMode: "now",
+      payload: { kind: "systemEvent", text: "test" },
+      state: { nextRunAtMs: Date.now() + 3600000 },
+    };
+    render(
+      renderCron(createProps({ jobs: [job], runsJobId: "new-job", runs: [] })),
+      container,
+    );
+
+    expect(container.textContent).toContain("No runs yet");
+    expect(container.textContent).toContain("Next run");
+  });
+
+  it("shows disabled warning for disabled jobs with no runs", () => {
+    const container = document.createElement("div");
+    const disabledJob: CronJob = {
+      id: "disabled-job",
+      name: "Disabled job",
+      enabled: false,
+      createdAtMs: 0,
+      updatedAtMs: 0,
+      schedule: { kind: "cron", expr: "0 9 * * *" },
+      sessionTarget: "main",
+      wakeMode: "now",
+      payload: { kind: "systemEvent", text: "test" },
+    };
+    render(
+      renderCron(createProps({ jobs: [disabledJob], runsJobId: "disabled-job", runs: [] })),
+      container,
+    );
+
+    expect(container.textContent).toContain("No runs yet");
+    expect(container.textContent).toContain("Job is disabled");
+  });
 });

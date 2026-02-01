@@ -17,12 +17,16 @@ If you want to avoid API keys entirely, you must:
 
 Web auth can protect **the control surface** and **CLI/tmux operations**, but it does **not eliminate provider credentials**.
 
-## Evidence from Official Docs
-1) Control UI (gateway dashboard) uses WS auth via `connect.params.auth.token/password`.  
-   Tokens are stored in UI settings, password is not persisted.  
-   Device identity is used when possible; token-only auth is allowed if explicitly enabled.  
-2) Tailscale Serve can authenticate the Control UI via identity headers when enabled.  
-3) FAQ: Claude Max/Pro can use a setup-token instead of API key (subscription path).  
+## Alignment with Official Docs (Key Points)
+1) **Gateway / Control UI auth** is separate from model provider auth.  
+   Docs: gateway auth requires token/password or Tailscale Serve identity; Control UI token-only auth is allowed only with explicit config. citeturn0search0  
+2) **Anthropic (Claude) subscription auth** uses **setup-token** (Claude Code CLI).  
+   Docs: `claude setup-token` → `openclaw models auth setup-token --provider anthropic`. citeturn0search2turn0search3turn0search4  
+3) **API keys remain the recommended production path** for explicit billing/SLA, while subscription auth is optional. citeturn0search1turn0search3  
+
+## Dev‑Only Scope
+Using web/subscription auth is **recommended only for development** where cost control matters.  
+Production should prefer **API keys** for predictable billing and SLA expectations. citeturn0search3
 
 ## Architecture Options
 
@@ -49,7 +53,7 @@ Cons: Still needs provider auth for remote models.
 
 ## Recommended Path (Dev)
 1) Use **Control UI token or Tailscale Serve identity** for secure access.  
-2) If cost is the issue, switch to **local models** or **subscription tokens**.  
+2) If cost is the issue, switch to **local models** or **subscription tokens** (Claude setup-token).  
 3) Keep tmux access behind **exec approvals** and policy allowlists.
 
 ## Security Notes
@@ -163,4 +167,3 @@ Bot → tmux session (via exec tool)
 ---
 
 **Status**: Research complete. Decision: Use subscription tokens for dev, API keys for prod.
-
