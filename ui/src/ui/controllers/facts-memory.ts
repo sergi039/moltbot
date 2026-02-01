@@ -115,7 +115,7 @@ function resolveAuthToken(state: FactsMemoryState): string | null {
     return deviceToken;
   }
   // Fall back to settings token
-  return resolveAuthToken(state);
+  return state.settings.token || null;
 }
 
 async function fetchJson<T>(url: string, token: string | null): Promise<T> {
