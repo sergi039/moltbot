@@ -227,6 +227,54 @@ else
   echo "  ⚠ Workflows not in backup (optional)"
 fi
 
+# 7. Restore memory databases (facts.db + main.sqlite)
+if [[ -d "$BACKUP_DIR/memory" ]]; then
+  echo "Restoring memory databases..."
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "  [dry-run] Would copy memory/ to $OPENCLAW_DIR/memory/"
+  else
+    mkdir -p "$OPENCLAW_DIR/memory"
+    if [[ -f "$BACKUP_DIR/memory/facts.db" ]]; then
+      cp "$BACKUP_DIR/memory/facts.db" "$OPENCLAW_DIR/memory/"
+      echo "  ✓ memory/facts.db"
+    fi
+    if [[ -f "$BACKUP_DIR/memory/main.sqlite" ]]; then
+      cp "$BACKUP_DIR/memory/main.sqlite" "$OPENCLAW_DIR/memory/"
+      echo "  ✓ memory/main.sqlite"
+    fi
+  fi
+else
+  echo "  ⚠ Memory databases not in backup (optional)"
+fi
+
+# 8. Restore agents (sessions history)
+if [[ -d "$BACKUP_DIR/agents" ]]; then
+  echo "Restoring agents (sessions history)..."
+  if [[ "$DRY_RUN" == "true" ]]; then
+    # Count what would be restored
+    session_count=$(find "$BACKUP_DIR/agents" -name "*.jsonl" -o -name "sessions.json" 2>/dev/null | wc -l | tr -d ' ')
+    echo "  [dry-run] Would restore agents/*/sessions/ ($session_count files)"
+  else
+    for agent_backup in "$BACKUP_DIR/agents"/*/; do
+      if [[ -d "$agent_backup" ]]; then
+        agent_name=$(basename "$agent_backup")
+        sessions_backup="$agent_backup/sessions"
+
+        if [[ -d "$sessions_backup" ]]; then
+          mkdir -p "$OPENCLAW_DIR/agents/$agent_name/sessions"
+          cp -R "$sessions_backup"/* "$OPENCLAW_DIR/agents/$agent_name/sessions/" 2>/dev/null || true
+        fi
+      fi
+    done
+
+    # Count restored
+    session_count=$(find "$OPENCLAW_DIR/agents" -name "*.jsonl" -o -name "sessions.json" 2>/dev/null | wc -l | tr -d ' ')
+    echo "  ✓ agents/*/sessions/ ($session_count files restored)"
+  fi
+else
+  echo "  ⚠ Sessions history not in backup (optional)"
+fi
+
 echo ""
 
 if [[ "$DRY_RUN" == "true" ]]; then
@@ -248,9 +296,20 @@ echo "✓ Permissions enforced"
 
 echo ""
 
-# 6. Restart gateway
-echo "=== Restarting Gateway ==="
+# 6. Rebuild UI + gateway (ensures UI is up-to-date after restore)
+echo "=== Rebuilding ==="
 cd "$REPO_ROOT"
+
+if [[ -f "package.json" ]]; then
+  echo "Rebuilding UI..."
+  pnpm ui:build 2>/dev/null || echo "  ⚠ UI build skipped (not in repo dir)"
+
+  echo "Rebuilding gateway..."
+  pnpm build 2>/dev/null || echo "  ⚠ Build skipped (not in repo dir)"
+fi
+
+# 7. Restart gateway
+echo "=== Restarting Gateway ==="
 
 if [[ "$PROFILE" == "dev" ]]; then
   nohup node ./openclaw.mjs --profile dev gateway run --port 19001 > /tmp/gateway.log 2>&1 &

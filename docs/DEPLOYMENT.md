@@ -45,9 +45,12 @@ cd ~/openclaw-prod
 git fetch upstream
 git reset --hard upstream/main
 pnpm install
+pnpm ui:build   # REQUIRED: rebuild control panel UI
 pnpm build
 launchctl kickstart -k gui/$UID/com.moltbot.gateway.prod
 ```
+
+**Important:** `pnpm ui:build` is required after every update. Without it, the control panel UI will show the old version.
 
 ---
 
@@ -101,6 +104,32 @@ This document must be linked from:
 
 ---
 
+## UI shows old version after update
+
+**Symptom:** Control panel UI shows old design (missing features, filters, etc.) after update/restore.
+**Root cause:** `pnpm ui:build` was not run after update.
+**Fix:**
+
+```bash
+cd ~/openclaw-prod
+pnpm ui:build
+launchctl kickstart -k gui/$UID/com.moltbot.gateway.prod
+```
+
+**Verification:** Check that `dist/control-ui/index.html` is newer than `ui/src/ui/app.ts`:
+
+```bash
+ls -la dist/control-ui/index.html ui/src/ui/app.ts
+```
+
+Or use the verification script:
+
+```bash
+./scripts/verify-env.sh --profile default
+```
+
+---
+
 ## Update failures (dirty repo)
 
 **Symptom:** update checker reports `dirty repo` and skips pulling updates.  
@@ -135,6 +164,7 @@ git apply /tmp/prod.patch
 
 ```
 pnpm install
+pnpm ui:build   # Don't forget UI build!
 pnpm build
 launchctl kickstart -k gui/$UID/com.moltbot.gateway.prod
 ```
@@ -184,6 +214,7 @@ git reset --hard upstream/main
 git fetch ~/moltbot release/memory-v1
 git merge --ff-only FETCH_HEAD
 pnpm install
+pnpm ui:build   # REQUIRED: rebuild control panel UI
 pnpm build
 ```
 
@@ -206,6 +237,7 @@ launchctl kickstart -k gui/$UID/com.moltbot.gateway.prod
 cd ~/openclaw-prod
 git reset --hard upstream/main
 pnpm install
+pnpm ui:build
 pnpm build
 launchctl kickstart -k gui/$UID/com.moltbot.gateway.prod
 ```
