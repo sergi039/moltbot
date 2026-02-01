@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 // Mock the dependencies
 vi.mock("../config/config.js", () => ({
@@ -13,12 +13,16 @@ vi.mock("../memory/facts/index.js", () => ({
   getRelevantContextWithTrace: vi.fn(),
 }));
 
+vi.mock("../infra/device-pairing.js", () => ({
+  resolveDeviceTokenByValue: vi.fn(),
+}));
+
 vi.mock("./auth.js", () => ({
   authorizeGatewayConnect: vi.fn(),
 }));
 
-import { handleMemoryHttpRequest } from "./memory-http.js";
 import { loadConfig } from "../config/config.js";
+import { resolveDeviceTokenByValue } from "../infra/device-pairing.js";
 import {
   createFactsMemoryManager,
   getHealthSummary,
@@ -26,6 +30,7 @@ import {
   getRelevantContextWithTrace,
 } from "../memory/facts/index.js";
 import { authorizeGatewayConnect } from "./auth.js";
+import { handleMemoryHttpRequest } from "./memory-http.js";
 
 function createMockRequest(url: string, method = "GET"): IncomingMessage {
   return {
@@ -143,6 +148,29 @@ describe("handleMemoryHttpRequest", () => {
 
       expect(handled).toBe(true);
       expect(res.statusCode).toBe(200);
+    });
+
+    it("allows request when device token is valid", async () => {
+      vi.mocked(loadConfig).mockReturnValue({
+        factsMemory: { enabled: false },
+      } as ReturnType<typeof loadConfig>);
+      vi.mocked(authorizeGatewayConnect).mockResolvedValue({ ok: false });
+      vi.mocked(resolveDeviceTokenByValue).mockResolvedValue({
+        deviceId: "device-1",
+        role: "operator",
+        scopes: ["operator.admin"],
+      } as any);
+
+      const req = createMockRequest("/api/memory/facts/status");
+      (req as unknown as { headers: Record<string, string> }).headers.authorization =
+        "Bearer device-token";
+      const res = createMockResponse();
+
+      const handled = await handleMemoryHttpRequest(req, res, { auth: mockAuth });
+
+      expect(handled).toBe(true);
+      expect(res.statusCode).toBe(200);
+      expect(resolveDeviceTokenByValue).toHaveBeenCalledWith("device-token");
     });
   });
 

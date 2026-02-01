@@ -401,6 +401,11 @@ memory.guardrail.skip: reason=cooldown limit=30000 value=5000 sessionId=abc123
 
 The gateway exposes HTTP endpoints for facts memory management. All endpoints require authentication.
 
+**Authentication:**
+- Use `Authorization: Bearer <token>`.
+- The token may be a shared gateway token **or** a paired device token.
+- Control UI automatically uses the paired device token when available; otherwise set a gateway token in Settings or use a tokenized URL.
+
 ### GET /api/memory/facts/status
 
 Returns facts memory status and health information.
