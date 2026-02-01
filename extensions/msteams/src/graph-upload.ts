@@ -15,11 +15,6 @@ const GRAPH_ROOT = "https://graph.microsoft.com/v1.0";
 const GRAPH_BETA = "https://graph.microsoft.com/beta";
 const GRAPH_SCOPE = "https://graph.microsoft.com";
 
-// Simple upload limit (4MB). Files larger than this require resumable upload session.
-const SIMPLE_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
-// Chunk size for resumable uploads (5MB recommended by Microsoft)
-const UPLOAD_CHUNK_SIZE = 5 * 1024 * 1024;
-
 export interface OneDriveUploadResult {
   id: string;
   webUrl: string;
@@ -27,99 +22,9 @@ export interface OneDriveUploadResult {
 }
 
 /**
- * Create a resumable upload session for large files.
- * Returns the upload URL to use for chunked uploads.
- */
-async function createUploadSession(params: {
-  apiRoot: string;
-  driveItemPath: string;
-  token: string;
-  fetchFn: typeof fetch;
-}): Promise<{ uploadUrl: string }> {
-  const res = await params.fetchFn(`${params.apiRoot}${params.driveItemPath}:/createUploadSession`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${params.token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      item: { "@microsoft.graph.conflictBehavior": "rename" },
-    }),
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Create upload session failed: ${res.status} ${res.statusText} - ${body}`);
-  }
-
-  const data = (await res.json()) as { uploadUrl?: string };
-  if (!data.uploadUrl) {
-    throw new Error("Create upload session response missing uploadUrl");
-  }
-
-  return { uploadUrl: data.uploadUrl };
-}
-
-/**
- * Upload a file in chunks using a resumable upload session.
- * Used for files >4MB.
- */
-async function uploadLargeFile(params: {
-  buffer: Buffer;
-  uploadUrl: string;
-  fetchFn: typeof fetch;
-}): Promise<OneDriveUploadResult> {
-  const totalSize = params.buffer.length;
-  let offset = 0;
-
-  while (offset < totalSize) {
-    const chunkEnd = Math.min(offset + UPLOAD_CHUNK_SIZE, totalSize);
-    const chunk = params.buffer.subarray(offset, chunkEnd);
-
-    const res = await params.fetchFn(params.uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Length": String(chunk.length),
-        "Content-Range": `bytes ${offset}-${chunkEnd - 1}/${totalSize}`,
-      },
-      body: new Uint8Array(chunk),
-    });
-
-    if (res.status === 202) {
-      // Chunk accepted, continue uploading
-      offset = chunkEnd;
-      continue;
-    }
-
-    if (res.ok) {
-      // Upload complete
-      const data = (await res.json()) as {
-        id?: string;
-        webUrl?: string;
-        name?: string;
-      };
-
-      if (!data.id || !data.webUrl || !data.name) {
-        throw new Error("Large file upload response missing required fields");
-      }
-
-      return {
-        id: data.id,
-        webUrl: data.webUrl,
-        name: data.name,
-      };
-    }
-
-    const body = await res.text().catch(() => "");
-    throw new Error(`Large file upload chunk failed: ${res.status} ${res.statusText} - ${body}`);
-  }
-
-  throw new Error("Large file upload completed without final response");
-}
-
-/**
  * Upload a file to the user's OneDrive root folder.
- * Automatically uses resumable upload session for files >4MB.
+ * For larger files, this uses the simple upload endpoint (up to 4MB).
+ * TODO: For files >4MB, implement resumable upload session.
  */
 export async function uploadToOneDrive(params: {
   buffer: Buffer;
@@ -131,30 +36,9 @@ export async function uploadToOneDrive(params: {
   const fetchFn = params.fetchFn ?? fetch;
   const token = await params.tokenProvider.getAccessToken(GRAPH_SCOPE);
 
-
   // Use "OpenClawShared" folder to organize bot-uploaded files
   const uploadPath = `/OpenClawShared/${encodeURIComponent(params.filename)}`;
 
-  const uploadPath = `/OpenClawShared/${encodeURIComponent(params.filename)}`;
-
-
-  // Use resumable upload for large files
-  if (params.buffer.length > SIMPLE_UPLOAD_MAX_BYTES) {
-    const session = await createUploadSession({
-      apiRoot: `${GRAPH_ROOT}/me/drive/root`,
-      driveItemPath: `:${uploadPath}`,
-      token,
-      fetchFn,
-    });
-
-    return uploadLargeFile({
-      buffer: params.buffer,
-      uploadUrl: session.uploadUrl,
-      fetchFn,
-    });
-  }
-
-  // Simple upload for smaller files
   const res = await fetchFn(`${GRAPH_ROOT}/me/drive/root:${uploadPath}:/content`, {
     method: "PUT",
     headers: {
@@ -274,14 +158,13 @@ export async function uploadAndShareOneDrive(params: {
   };
 }
 
-// ======
+// ============================================================================
 // SharePoint upload functions for group chats and channels
-// ======
+// ============================================================================
 
 /**
  * Upload a file to a SharePoint site.
  * This is used for group chats and channels where /me/drive doesn't work for bots.
- * Automatically uses resumable upload session for files >4MB.
  *
  * @param params.siteId - SharePoint site ID (e.g., "contoso.sharepoint.com,guid1,guid2")
  */
@@ -296,38 +179,20 @@ export async function uploadToSharePoint(params: {
   const fetchFn = params.fetchFn ?? fetch;
   const token = await params.tokenProvider.getAccessToken(GRAPH_SCOPE);
 
-
   // Use "OpenClawShared" folder to organize bot-uploaded files
   const uploadPath = `/OpenClawShared/${encodeURIComponent(params.filename)}`;
 
-  const uploadPath = `/OpenClawShared/${encodeURIComponent(params.filename)}`;
-
-
-  // Use resumable upload for large files
-  if (params.buffer.length > SIMPLE_UPLOAD_MAX_BYTES) {
-    const session = await createUploadSession({
-      apiRoot: `${GRAPH_ROOT}/sites/${params.siteId}/drive/root`,
-      driveItemPath: `:${uploadPath}`,
-      token,
-      fetchFn,
-    });
-
-    return uploadLargeFile({
-      buffer: params.buffer,
-      uploadUrl: session.uploadUrl,
-      fetchFn,
-    });
-  }
-
-  // Simple upload for smaller files
-  const res = await fetchFn(`${GRAPH_ROOT}/sites/${params.siteId}/drive/root:${uploadPath}:/content`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": params.contentType ?? "application/octet-stream",
+  const res = await fetchFn(
+    `${GRAPH_ROOT}/sites/${params.siteId}/drive/root:${uploadPath}:/content`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": params.contentType ?? "application/octet-stream",
+      },
+      body: new Uint8Array(params.buffer),
     },
-    body: new Uint8Array(params.buffer),
-  });
+  );
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -480,18 +345,23 @@ export async function createSharePointSharingLink(params: {
     body.recipients = params.recipientObjectIds.map((id) => ({ objectId: id }));
   }
 
-  const res = await fetchFn(`${apiRoot}/sites/${params.siteId}/drive/items/${params.itemId}/createLink`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+  const res = await fetchFn(
+    `${apiRoot}/sites/${params.siteId}/drive/items/${params.itemId}/createLink`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+  );
 
   if (!res.ok) {
     const respBody = await res.text().catch(() => "");
-    throw new Error(`Create SharePoint sharing link failed: ${res.status} ${res.statusText} - ${respBody}`);
+    throw new Error(
+      `Create SharePoint sharing link failed: ${res.status} ${res.statusText} - ${respBody}`,
+    );
   }
 
   const data = (await res.json()) as {
