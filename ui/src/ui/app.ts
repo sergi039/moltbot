@@ -32,6 +32,7 @@ import type {
   ExecApprovalsSnapshot,
 } from "./controllers/exec-approvals";
 import type { DevicePairingList } from "./controllers/devices";
+import type { FactsMemoryStatus, TopFactItem } from "./controllers/facts-memory";
 import type { ExecApprovalRequest } from "./controllers/exec-approval";
 import {
   resetToolStream as resetToolStreamInternal,
@@ -246,6 +247,25 @@ export class OpenClawApp extends LitElement {
   @state() logsLimit = 500;
   @state() logsMaxBytes = 250_000;
   @state() logsAtBottom = true;
+
+  // Facts memory state
+  @state() factsMemoryLoading = false;
+  @state() factsMemoryStatus: FactsMemoryStatus | null = null;
+  @state() factsMemoryError: string | null = null;
+  @state() topFactsLoading = false;
+  @state() topFacts: TopFactItem[] = [];
+  @state() topFactsError: string | null = null;
+  @state() topFactsLimit = 10;
+  @state() topFactsTypeFilter: string | null = null;
+  @state() editingFactId: string | null = null;
+  @state() editingImportance = 0;
+  // Memory search state
+  @state() searchQuery = "";
+  @state() searchLoading = false;
+  @state() searchResult: import("./controllers/facts-memory").TraceResult | null = null;
+  @state() searchError: string | null = null;
+  @state() searchRole = "operator";
+  @state() searchLimit = 10;
 
   client: GatewayBrowserClient | null = null;
   private chatScrollFrame: number | null = null;

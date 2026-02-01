@@ -82,6 +82,19 @@ import {
 import { loadCronRuns, toggleCronJob, runCronJob, removeCronJob, addCronJob } from "./controllers/cron";
 import { loadDebug, callDebugMethod } from "./controllers/debug";
 import { loadLogs } from "./controllers/logs";
+import {
+  loadFactsMemoryStatus,
+  loadTopFacts,
+  setTopFactsFilter,
+  setTopFactsLimit,
+  deleteFact,
+  updateFactImportance,
+  searchMemories,
+  setSearchQuery,
+  setSearchRole,
+  setSearchLimit,
+  clearSearch,
+} from "./controllers/facts-memory";
 
 const AVATAR_DATA_RE = /^data:/i;
 const AVATAR_HTTP_RE = /^https?:\/\//i;
@@ -233,6 +246,62 @@ export function renderApp(state: AppViewState) {
               },
               onConnect: () => state.connect(),
               onRefresh: () => state.loadOverview(),
+              // Facts memory props
+              factsMemoryLoading: state.factsMemoryLoading,
+              factsMemoryStatus: state.factsMemoryStatus,
+              factsMemoryError: state.factsMemoryError,
+              topFactsLoading: state.topFactsLoading,
+              topFacts: state.topFacts,
+              topFactsError: state.topFactsError,
+              topFactsLimit: state.topFactsLimit,
+              topFactsTypeFilter: state.topFactsTypeFilter,
+              onFactsMemoryRefresh: () => loadFactsMemoryStatus(state),
+              onTopFactsRefresh: () => loadTopFacts(state),
+              onTopFactsLimitChange: (limit) => setTopFactsLimit(state, limit),
+              onTopFactsTypeChange: (type) => setTopFactsFilter(state, type),
+              // Fact actions
+              onDeleteFact: (factId) => {
+                void deleteFact(state, factId);
+              },
+              onUpdateFactImportance: (factId, importance) => {
+                void updateFactImportance(state, factId, importance);
+              },
+              // Edit state
+              editingFactId: state.editingFactId,
+              editingImportance: state.editingImportance,
+              onStartEditFact: (factId, currentImportance) => {
+                state.editingFactId = factId;
+                state.editingImportance = currentImportance;
+              },
+              onCancelEditFact: () => {
+                state.editingFactId = null;
+                state.editingImportance = 0;
+              },
+              onConfirmEditFact: () => {
+                if (state.editingFactId) {
+                  void updateFactImportance(state, state.editingFactId, state.editingImportance).then(() => {
+                    state.editingFactId = null;
+                    state.editingImportance = 0;
+                  });
+                }
+              },
+              onEditImportanceChange: (importance) => {
+                state.editingImportance = importance;
+              },
+              // Search state
+              searchQuery: state.searchQuery,
+              searchLoading: state.searchLoading,
+              searchResult: state.searchResult,
+              searchError: state.searchError,
+              searchRole: state.searchRole,
+              searchLimit: state.searchLimit,
+              onSearchQueryChange: (query) => setSearchQuery(state, query),
+              onSearchRoleChange: (role) => setSearchRole(state, role),
+              onSearchLimitChange: (limit) => setSearchLimit(state, limit),
+              onSearch: () => {
+                void searchMemories(state);
+              },
+              onClearSearch: () => clearSearch(state),
             })
           : nothing}
 

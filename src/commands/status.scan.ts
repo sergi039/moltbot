@@ -14,6 +14,12 @@ import { pickGatewaySelfPresence, resolveGatewayProbeAuth } from "./status.gatew
 import { getStatusSummary } from "./status.summary.js";
 import { getUpdateCheckResult } from "./status.update.js";
 import { buildChannelsTable } from "./status-all/channels.js";
+import {
+  createFactsMemoryManager,
+  getHealthSummary,
+  type HealthSnapshot,
+  type HealthAlert,
+} from "../memory/facts/index.js";
 
 type MemoryStatusSnapshot = ReturnType<MemoryIndexManager["status"]> & {
   agentId: string;
@@ -24,6 +30,16 @@ type MemoryPluginStatus = {
   slot: string | null;
   reason?: string;
 };
+
+type FactsMemoryHealthStatus = {
+  enabled: boolean;
+  dbSizeMb: number;
+  totalMemories: number;
+  extractionErrors: number;
+  lastExtractionAt: string | null;
+  alertCount: number;
+  status: "ok" | "warning" | "critical";
+} | null;
 
 function resolveMemoryPluginStatus(cfg: ReturnType<typeof loadConfig>): MemoryPluginStatus {
   const pluginsEnabled = cfg.plugins?.enabled !== false;
@@ -54,6 +70,7 @@ export type StatusScanResult = {
   summary: Awaited<ReturnType<typeof getStatusSummary>>;
   memory: MemoryStatusSnapshot | null;
   memoryPlugin: MemoryPluginStatus;
+  factsMemory: FactsMemoryHealthStatus;
 };
 
 export async function scanStatus(
@@ -161,6 +178,32 @@ export async function scanStatus(
         await manager.close().catch(() => {});
         return { agentId, ...status };
       })();
+
+      // Check facts memory health
+      const factsMemory = ((): FactsMemoryHealthStatus => {
+        const factsConfig = cfg.factsMemory;
+        if (factsConfig?.enabled === false) return null;
+        try {
+          const manager = createFactsMemoryManager(factsConfig ?? {});
+          const summary = getHealthSummary(
+            manager.getStore(),
+            manager.getMarkdownPath(),
+            factsConfig,
+          );
+          manager.close().catch(() => {});
+          return {
+            enabled: true,
+            dbSizeMb: summary.snapshot.dbSizeMb,
+            totalMemories: summary.snapshot.totalMemories,
+            extractionErrors: summary.snapshot.extractionErrors,
+            lastExtractionAt: summary.snapshot.lastExtractionAt,
+            alertCount: summary.activeAlerts.length,
+            status: summary.status,
+          };
+        } catch {
+          return null;
+        }
+      })();
       progress.tick();
 
       progress.setLabel("Reading sessions…");
@@ -189,6 +232,7 @@ export async function scanStatus(
         summary,
         memory,
         memoryPlugin,
+        factsMemory,
       };
     },
   );
