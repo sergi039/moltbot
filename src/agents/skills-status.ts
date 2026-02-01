@@ -32,6 +32,7 @@ export type SkillInstallOption = {
 export type SkillStatusEntry = {
   name: string;
   description: string;
+  longDescription?: string;
   source: string;
   filePath: string;
   baseDir: string;
@@ -181,6 +182,9 @@ function buildSkillStatus(
     entry.frontmatter.website ??
     entry.frontmatter.url;
   const homepage = homepageRaw?.trim() ? homepageRaw.trim() : undefined;
+  const longDescriptionRaw =
+    entry.frontmatter.long_description ?? entry.frontmatter.longDescription;
+  const longDescription = longDescriptionRaw?.trim() ? longDescriptionRaw.trim() : undefined;
 
   const requiredBins = entry.metadata?.requires?.bins ?? [];
   const requiredAnyBins = entry.metadata?.requires?.anyBins ?? [];
@@ -255,6 +259,7 @@ function buildSkillStatus(
   return {
     name: entry.skill.name,
     description: entry.skill.description,
+    longDescription,
     source: entry.skill.source,
     filePath: entry.skill.filePath,
     baseDir: entry.skill.baseDir,

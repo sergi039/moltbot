@@ -477,6 +477,7 @@ export type SkillInstallOption = {
 export type SkillStatusEntry = {
   name: string;
   description: string;
+  longDescription?: string;
   source: string;
   filePath: string;
   baseDir: string;

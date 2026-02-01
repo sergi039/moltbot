@@ -1,5 +1,5 @@
 import { html, nothing } from "lit";
-import type { SkillMessageMap } from "../controllers/skills";
+import type { SkillMessageMap, SkillStatusFilter } from "../controllers/skills";
 import type { SkillStatusEntry, SkillStatusReport } from "../types";
 import { clampText } from "../format";
 
@@ -8,10 +8,12 @@ export type SkillsProps = {
   report: SkillStatusReport | null;
   error: string | null;
   filter: string;
+  statusFilter: SkillStatusFilter;
   edits: Record<string, string>;
   busyKey: string | null;
   messages: SkillMessageMap;
   onFilterChange: (next: string) => void;
+  onStatusFilterChange: (next: SkillStatusFilter) => void;
   onRefresh: () => void;
   onToggle: (skillKey: string, enabled: boolean) => void;
   onEdit: (skillKey: string, value: string) => void;
@@ -19,14 +21,32 @@ export type SkillsProps = {
   onInstall: (skillKey: string, name: string, installId: string) => void;
 };
 
+function isSkillActive(skill: SkillStatusEntry): boolean {
+  return skill.eligible && !skill.disabled && !skill.blockedByAllowlist;
+}
+
 export function renderSkills(props: SkillsProps) {
   const skills = props.report?.skills ?? [];
   const filter = props.filter.trim().toLowerCase();
-  const filtered = filter
+
+  // Apply text filter first
+  const textFiltered = filter
     ? skills.filter((skill) =>
         [skill.name, skill.description, skill.source].join(" ").toLowerCase().includes(filter),
       )
     : skills;
+
+  // Apply status filter
+  const filtered =
+    props.statusFilter === "all"
+      ? textFiltered
+      : props.statusFilter === "active"
+        ? textFiltered.filter(isSkillActive)
+        : textFiltered.filter((s) => !isSkillActive(s));
+
+  // Count active/inactive for display
+  const activeCount = textFiltered.filter(isSkillActive).length;
+  const inactiveCount = textFiltered.length - activeCount;
 
   return html`
     <section class="card">
@@ -49,7 +69,27 @@ export function renderSkills(props: SkillsProps) {
             placeholder="Search skills"
           />
         </label>
-        <div class="muted">${filtered.length} shown</div>
+        <div class="btn-group" style="margin-left: 12px;">
+          <button
+            class="btn ${props.statusFilter === "all" ? "primary" : ""}"
+            @click=${() => props.onStatusFilterChange("all")}
+          >
+            All ${textFiltered.length}
+          </button>
+          <button
+            class="btn ${props.statusFilter === "active" ? "primary" : ""}"
+            @click=${() => props.onStatusFilterChange("active")}
+          >
+            Active ${activeCount}
+          </button>
+          <button
+            class="btn ${props.statusFilter === "inactive" ? "primary" : ""}"
+            @click=${() => props.onStatusFilterChange("inactive")}
+          >
+            Inactive ${inactiveCount}
+          </button>
+        </div>
+        <div class="muted" style="margin-left: 12px;">${filtered.length} shown</div>
       </div>
 
       ${
@@ -93,7 +133,7 @@ function renderSkill(skill: SkillStatusEntry, props: SkillsProps) {
         <div class="list-title">
           ${skill.emoji ? `${skill.emoji} ` : ""}${skill.name}
         </div>
-        <div class="list-sub">${clampText(skill.description, 140)}</div>
+        <div class="list-sub">${clampText(skill.longDescription ?? skill.description, 200)}</div>
         <div class="chip-row" style="margin-top: 6px;">
           <span class="chip">${skill.source}</span>
           <span class="chip ${skill.eligible ? "chip-ok" : "chip-warn"}">
