@@ -20,6 +20,7 @@ PROFILE="default"
 RESTORE_DATE=""
 BACKUP_BASE="$HOME/Backups/openclaw"
 DRY_RUN=false
+SAFE_MERGE=true  # Preserve gateway config if missing from backup (default: on for safety)
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -36,15 +37,20 @@ while [[ $# -gt 0 ]]; do
       DRY_RUN=true
       shift
       ;;
+    --safe-merge)
+      SAFE_MERGE=true
+      shift
+      ;;
     -h|--help)
-      echo "Usage: $0 [--profile dev|default] [--date YYYY-MM-DD] [--dry-run]"
+      echo "Usage: $0 [--profile dev|default] [--date YYYY-MM-DD] [--dry-run] [--safe-merge]"
       echo ""
       echo "Restore openclaw configuration from backup."
       echo ""
       echo "Options:"
-      echo "  --profile   Profile to restore (dev or default). Default: default"
-      echo "  --date      Backup date to restore (YYYY-MM-DD). Default: latest"
-      echo "  --dry-run   Show what would be restored without making changes"
+      echo "  --profile     Profile to restore (dev or default). Default: default"
+      echo "  --date        Backup date to restore (YYYY-MM-DD). Default: latest"
+      echo "  --dry-run     Show what would be restored without making changes"
+      echo "  --safe-merge  Preserve gateway.mode and gateway.auth.token if missing from backup"
       exit 0
       ;;
     *)
@@ -141,14 +147,42 @@ else
   echo "=== Restoring ==="
 fi
 
-# 1. Restore config
+# 1. Restore config (with safe-merge support)
 if [[ -f "$BACKUP_DIR/openclaw.json" ]]; then
   echo "Restoring config..."
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "  [dry-run] Would copy openclaw.json to $OPENCLAW_DIR/"
+    if [[ "$SAFE_MERGE" == "true" ]]; then
+      echo "  [dry-run] Would preserve gateway.mode and gateway.auth.token if missing"
+    fi
   else
     mkdir -p "$OPENCLAW_DIR"
-    cp "$BACKUP_DIR/openclaw.json" "$OPENCLAW_DIR/"
+
+    # Safe-merge: preserve gateway config if missing from backup
+    if [[ "$SAFE_MERGE" == "true" && -f "$OPENCLAW_DIR/openclaw.json" ]]; then
+      # Extract current gateway config
+      CURRENT_MODE=$(grep -o '"mode"[[:space:]]*:[[:space:]]*"[^"]*"' "$OPENCLAW_DIR/openclaw.json" 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/' || true)
+      CURRENT_TOKEN=$(grep -o '"token"[[:space:]]*:[[:space:]]*"[^"]*"' "$OPENCLAW_DIR/openclaw.json" 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/' || true)
+
+      # Copy backup config
+      cp "$BACKUP_DIR/openclaw.json" "$OPENCLAW_DIR/"
+
+      # Check if backup has gateway config
+      BACKUP_HAS_MODE=$(grep -c '"mode"[[:space:]]*:[[:space:]]*"local"' "$OPENCLAW_DIR/openclaw.json" 2>/dev/null || echo 0)
+      BACKUP_HAS_TOKEN=$(grep -c '"token"[[:space:]]*:[[:space:]]*"[^"]\+"' "$OPENCLAW_DIR/openclaw.json" 2>/dev/null || echo 0)
+
+      # Restore missing gateway config via CLI
+      if [[ "$BACKUP_HAS_MODE" -eq 0 && -n "$CURRENT_MODE" ]]; then
+        echo "  ℹ Preserving gateway.mode=$CURRENT_MODE (missing from backup)"
+        cd "$REPO_ROOT" && pnpm openclaw config set gateway.mode "$CURRENT_MODE" 2>/dev/null || true
+      fi
+      if [[ "$BACKUP_HAS_TOKEN" -eq 0 && -n "$CURRENT_TOKEN" ]]; then
+        echo "  ℹ Preserving gateway.auth.token (missing from backup)"
+        cd "$REPO_ROOT" && pnpm openclaw config set gateway.auth.token "$CURRENT_TOKEN" 2>/dev/null || true
+      fi
+    else
+      cp "$BACKUP_DIR/openclaw.json" "$OPENCLAW_DIR/"
+    fi
     echo "  ✓ openclaw.json"
   fi
 else
@@ -308,13 +342,27 @@ if [[ -f "package.json" ]]; then
   pnpm build 2>/dev/null || echo "  ⚠ Build skipped (not in repo dir)"
 fi
 
-# 7. Restart gateway
+# 7. Validate config before restarting gateway
+echo "=== Config Validation ==="
+
+OPENCLAW_STATE_DIR="$OPENCLAW_DIR" "$SCRIPT_DIR/gateway-preflight.sh"
+PREFLIGHT_STATUS=$?
+
+if [[ "$PREFLIGHT_STATUS" -ne 0 ]]; then
+  echo ""
+  echo -e "\033[0;31m[CONFIG_INVALID]\033[0m Gateway will NOT be started."
+  echo "Fix the config issues above, then start gateway manually:"
+  echo "  nohup pnpm openclaw gateway run --port 18789 > /tmp/gateway.log 2>&1 &"
+  exit 1
+fi
+
+# 8. Restart gateway
 echo "=== Restarting Gateway ==="
 
 if [[ "$PROFILE" == "dev" ]]; then
   nohup node ./openclaw.mjs --profile dev gateway run --port 19001 > /tmp/gateway.log 2>&1 &
 else
-  nohup node ./openclaw.mjs gateway run --port 19001 > /tmp/gateway.log 2>&1 &
+  nohup node ./openclaw.mjs gateway run --port 18789 > /tmp/gateway.log 2>&1 &
 fi
 
 sleep 3

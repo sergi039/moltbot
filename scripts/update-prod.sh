@@ -95,13 +95,37 @@ pnpm ui:build
 log "Building..."
 pnpm build
 
+# Validate config before restarting gateway
+log "Validating gateway config..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if OPENCLAW_STATE_DIR="$PROD_STATE" "$SCRIPT_DIR/gateway-preflight.sh"; then
+  log "Config valid"
+else
+  error "Gateway config is invalid!"
+  error "Fix config before starting gateway:"
+  error "  pnpm openclaw config set gateway.mode local"
+  error "  pnpm openclaw config set gateway.auth.token \"<token>\""
+  exit 1
+fi
+
 # Restart gateway if running
 if pgrep -f "openclaw.*gateway" >/dev/null; then
   log "Restarting gateway..."
   OPENCLAW_STATE_DIR="$PROD_STATE" openclaw gateway stop 2>/dev/null || true
   sleep 2
-  # Gateway will be started by launchd or user manually
-  warn "Gateway stopped. Start it manually or via launchd."
+fi
+
+# Start gateway with preflight check
+log "Starting gateway..."
+nohup "$SCRIPT_DIR/gateway-preflight.sh" --start --port 18789 > /tmp/openclaw-gateway.log 2>&1 &
+sleep 3
+
+if pgrep -f "gateway" >/dev/null; then
+  log "Gateway started"
+else
+  error "Gateway failed to start. Check /tmp/openclaw-gateway.log"
+  exit 1
 fi
 
 log "Update complete!"

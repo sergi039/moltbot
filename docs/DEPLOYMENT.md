@@ -78,7 +78,56 @@ Each environment uses its own isolated state directory:
 
 ---
 
-## 6) Required Documentation Links
+## 6) Gateway Config Requirements
+
+Gateway **will not start** without these config values:
+
+| Key | Required Value | Description |
+|-----|---------------|-------------|
+| `gateway.mode` | `local` | Enables local gateway mode |
+| `gateway.auth.token` | any non-empty string | Auth token for gateway API |
+
+### Setting config
+
+```bash
+pnpm openclaw config set gateway.mode local
+pnpm openclaw config set gateway.auth.mode token
+pnpm openclaw config set gateway.auth.token "your-secret-token"
+```
+
+### Verifying config
+
+```bash
+./scripts/verify-env.sh --profile default
+# or
+./scripts/gateway-preflight.sh
+```
+
+### Common errors
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `gateway.mode must be 'local'` | Config missing or reset | Set `gateway.mode local` |
+| `gateway.auth.token is missing` | Token not set | Set `gateway.auth.token` |
+| `CONFIG_INVALID` | Restore/update wiped config | Re-run config set commands |
+
+### LaunchAgent
+
+To install the LaunchAgent (auto-start gateway):
+
+```bash
+cp scripts/com.moltbot.gateway.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.moltbot.gateway.plist
+```
+
+The LaunchAgent uses `gateway-preflight.sh` which:
+- Validates config before starting gateway
+- Exits with code 1 if config invalid (prevents infinite restart loop)
+- Only restarts if gateway crashed (exit 0)
+
+---
+
+## 8) Required Documentation Links
 
 This document must be linked from:
 
@@ -94,7 +143,7 @@ This document must be linked from:
 
 ---
 
-## 7) Verification Checklist
+## 9) Verification Checklist
 
 - [ ] `git status` clean in prod repo
 - [ ] `OPENCLAW_STATE_DIR=~/.openclaw` for prod
