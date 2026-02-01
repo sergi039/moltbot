@@ -26,7 +26,22 @@
 - When Peter asks for links, reply with full `https://docs.openclaw.ai/...` URLs (not root-relative).
 - When you touch docs, end the reply with the `https://docs.openclaw.ai/...` URLs you referenced.
 - README (GitHub): keep absolute docs URLs (`https://docs.openclaw.ai/...`) so links work on GitHub.
-- Docs content must be generic: no personal device names/hostnames/paths; use placeholders like `user@gateway-host` and “gateway host”.
+- Docs content must be generic: no personal device names/hostnames/paths; use placeholders like `user@gateway-host` and "gateway host".
+
+## Quick Doc Links
+
+Use WebFetch when needed:
+
+- **Getting Started**: https://docs.openclaw.ai/start-here
+- **Configuration**: https://docs.openclaw.ai/configuration
+- **Gateway**: https://docs.openclaw.ai/gateway
+- **Skills**: https://docs.openclaw.ai/tools/skills
+- **Tools**: https://docs.openclaw.ai/tools
+- **Channels**: https://docs.openclaw.ai/channels
+- **Cron Jobs**: https://docs.openclaw.ai/gateway/cron
+- **Memory**: https://docs.openclaw.ai/memory
+- **Agents**: https://docs.openclaw.ai/agents
+- **API Reference**: https://docs.openclaw.ai/api
 
 ## exe.dev VM ops (general)
 
@@ -106,6 +121,20 @@
 
 - **Review mode (PR link only):** read `gh pr view/diff`; **do not** switch branches; **do not** change code.
 - **Landing mode:** create an integration branch from `main`, bring in PR commits (**prefer rebase** for linear history; **merge allowed** when complexity/conflicts make it safer), apply fixes, add changelog (+ thanks + PR #), run full gate **locally before committing** (`pnpm lint && pnpm build && pnpm test`), commit, merge back to `main`, then `git switch main` (never stay on a topic branch after landing). Important: contributor needs to be in git graph after this!
+
+## Auth Strategy
+
+| Provider | Auth Method | Fallback |
+|----------|-------------|----------|
+| Claude | setup-token (Pro/Max subscription) | API key if rate-limited |
+| Codex/OpenAI | OAuth token (ChatGPT Plus) | API key if rate-limited |
+| Gateway | Token + Tailscale Serve identity | — |
+| tmux | Via Gateway exec tool | — |
+
+- **Always prefer subscription auth** — cheaper, sufficient for most tasks.
+- API keys only as fallback when subscription rate-limited or for critical prod paths.
+- Web auth secures the Gateway control plane, but does **not** replace provider auth.
+- Details: `docs/architecture/TMUX_WEB_AUTH_RESEARCH_2026-02-01.md`
 
 ## Security & Configuration Tips
 
