@@ -11,6 +11,7 @@ import {
   titleForTab,
   type Tab,
 } from "./navigation";
+import { normalizeBasePath } from "./navigation";
 import { icons } from "./icons";
 import type { UiSettings } from "./storage";
 import type { ThemeMode } from "./theme";
@@ -143,7 +144,10 @@ export function renderApp(state: AppViewState) {
           </button>
           <div class="brand">
             <div class="brand-logo">
-              <img src="./favicon.svg" alt="OpenClaw" />
+              <img
+                src={`${normalizeBasePath(state.basePath) || ""}/favicon.svg`}
+                alt="OpenClaw"
+              />
             </div>
             <div class="brand-text">
               <div class="brand-title">OPENCLAW</div>
