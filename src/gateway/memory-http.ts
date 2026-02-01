@@ -5,14 +5,9 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-
-import {
-  sendJson,
-  sendMethodNotAllowed,
-  sendInvalidRequest,
-  sendUnauthorized,
-} from "./http-common.js";
 import { loadConfig } from "../config/config.js";
+import { resolveDeviceTokenByValue } from "../infra/device-pairing.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import {
   createFactsMemoryManager,
   getHealthSummary,
@@ -21,9 +16,14 @@ import {
   type FactsMemoryManager,
 } from "../memory/facts/index.js";
 import { authorizeGatewayConnect, type ResolvedGatewayAuth } from "./auth.js";
-import { getBearerToken } from "./http-utils.js";
 import { readJsonBody } from "./hooks.js";
-import { createSubsystemLogger } from "../logging/subsystem.js";
+import {
+  sendJson,
+  sendMethodNotAllowed,
+  sendInvalidRequest,
+  sendUnauthorized,
+} from "./http-common.js";
+import { getBearerToken } from "./http-utils.js";
 
 const logger = createSubsystemLogger("memory-http");
 
@@ -142,13 +142,29 @@ export async function handleMemoryHttpRequest(
   if (opts?.auth) {
     const cfg = loadConfig();
     const token = getBearerToken(req);
+
+    // Try shared gateway token first
     const authResult = await authorizeGatewayConnect({
       auth: opts.auth,
       connectAuth: token ? { token, password: token } : null,
       req,
       trustedProxies: opts.trustedProxies ?? cfg.gateway?.trustedProxies,
     });
-    if (!authResult.ok) {
+
+    if (!authResult.ok && token) {
+      // Fall back to device token auth
+      const deviceAuth = await resolveDeviceTokenByValue(token);
+      if (deviceAuth) {
+        // Device token is valid - allow access
+        logger.debug(
+          `Memory API auth via device token: ${deviceAuth.deviceId} (${deviceAuth.role})`,
+        );
+      } else {
+        // Neither shared token nor device token worked
+        sendUnauthorized(res);
+        return true;
+      }
+    } else if (!authResult.ok) {
       sendUnauthorized(res);
       return true;
     }

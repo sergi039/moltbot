@@ -69,6 +69,12 @@ export interface FactsMemoryState {
     gatewayUrl: string;
     token: string;
   };
+  // Device token from WebSocket hello (takes precedence over settings.token)
+  hello?: {
+    auth?: {
+      deviceToken?: string;
+    };
+  } | null;
 }
 
 // ============================================================================
@@ -98,6 +104,20 @@ function buildHeaders(token: string | null): HeadersInit {
   return headers;
 }
 
+/**
+ * Resolve the best auth token to use.
+ * Priority: deviceToken (from hello) > settings.token
+ */
+function resolveAuthToken(state: FactsMemoryState): string | null {
+  // Device token from WebSocket session takes precedence
+  const deviceToken = state.hello?.auth?.deviceToken;
+  if (deviceToken) {
+    return deviceToken;
+  }
+  // Fall back to settings token
+  return resolveAuthToken(state);
+}
+
 async function fetchJson<T>(url: string, token: string | null): Promise<T> {
   const response = await fetch(url, {
     method: "GET",
@@ -106,6 +126,12 @@ async function fetchJson<T>(url: string, token: string | null): Promise<T> {
 
   if (!response.ok) {
     const text = await response.text();
+    // Provide helpful message for auth errors
+    if (response.status === 401) {
+      throw new Error(
+        "Unauthorized. Connect to gateway with device pairing, or set token in Settings → Gateway Token.",
+      );
+    }
     throw new Error(`HTTP ${response.status}: ${text}`);
   }
 
@@ -143,7 +169,7 @@ export async function loadFactsMemoryStatus(state: FactsMemoryState): Promise<vo
   try {
     const baseUrl = resolveHttpBaseUrl(state.settings.gatewayUrl);
     const url = `${baseUrl}/api/memory/facts/status`;
-    const data = await fetchJson<FactsMemoryStatus>(url, state.settings.token || null);
+    const data = await fetchJson<FactsMemoryStatus>(url, resolveAuthToken(state));
     state.factsMemoryStatus = data;
   } catch (err) {
     state.factsMemoryError = String(err);
@@ -169,7 +195,7 @@ export async function loadTopFacts(state: FactsMemoryState): Promise<void> {
       url += `&type=${encodeURIComponent(state.topFactsTypeFilter)}`;
     }
 
-    const data = await fetchJson<{ items: TopFactItem[] }>(url, state.settings.token || null);
+    const data = await fetchJson<{ items: TopFactItem[] }>(url, resolveAuthToken(state));
     state.topFacts = data.items;
   } catch (err) {
     state.topFactsError = String(err);
@@ -219,7 +245,7 @@ export async function deleteFact(
   try {
     const baseUrl = resolveHttpBaseUrl(state.settings.gatewayUrl);
     const url = `${baseUrl}/api/memory/facts/delete`;
-    await postJson<{ success: boolean }>(url, state.settings.token || null, { id: factId });
+    await postJson<{ success: boolean }>(url, resolveAuthToken(state), { id: factId });
 
     // Optimistic update: remove from local state
     state.topFacts = state.topFacts.filter((f) => f.id !== factId);
@@ -246,7 +272,7 @@ export async function updateFactImportance(
     const url = `${baseUrl}/api/memory/facts/update`;
     const result = await postJson<{ success: boolean; entry: TopFactItem }>(
       url,
-      state.settings.token || null,
+      resolveAuthToken(state),
       { id: factId, importance },
     );
 
@@ -277,7 +303,7 @@ export async function mergeFacts(
   try {
     const baseUrl = resolveHttpBaseUrl(state.settings.gatewayUrl);
     const url = `${baseUrl}/api/memory/facts/merge`;
-    await postJson<{ success: boolean }>(url, state.settings.token || null, { sourceId, targetId });
+    await postJson<{ success: boolean }>(url, resolveAuthToken(state), { sourceId, targetId });
 
     // Optimistic update: remove source from local state (it's now superseded)
     state.topFacts = state.topFacts.filter((f) => f.id !== sourceId);
@@ -312,7 +338,7 @@ export async function searchMemories(state: FactsMemoryState): Promise<void> {
       url += `&role=${encodeURIComponent(state.searchRole)}`;
     }
 
-    const data = await fetchJson<TraceResult>(url, state.settings.token || null);
+    const data = await fetchJson<TraceResult>(url, resolveAuthToken(state));
     state.searchResult = data;
   } catch (err) {
     state.searchError = String(err);

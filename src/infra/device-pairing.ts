@@ -556,3 +556,41 @@ export async function revokeDeviceToken(params: {
     return entry;
   });
 }
+
+/**
+ * Resolve a device token by its value (without knowing deviceId).
+ * Used for HTTP API auth where only the bearer token is available.
+ * Returns device info and token details if found and not revoked.
+ */
+export type ResolvedDeviceToken = {
+  deviceId: string;
+  displayName?: string;
+  role: string;
+  scopes: string[];
+  token: DeviceAuthToken;
+};
+
+export async function resolveDeviceTokenByValue(
+  tokenValue: string,
+  baseDir?: string,
+): Promise<ResolvedDeviceToken | null> {
+  const state = await loadState(baseDir);
+
+  for (const device of Object.values(state.pairedByDeviceId)) {
+    if (!device.tokens) continue;
+
+    for (const [role, tokenEntry] of Object.entries(device.tokens)) {
+      if (tokenEntry.token === tokenValue && !tokenEntry.revokedAtMs) {
+        return {
+          deviceId: device.deviceId,
+          displayName: device.displayName,
+          role,
+          scopes: tokenEntry.scopes,
+          token: tokenEntry,
+        };
+      }
+    }
+  }
+
+  return null;
+}
