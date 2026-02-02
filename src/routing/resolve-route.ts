@@ -181,23 +181,28 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
     return matchesAccountId(binding.match?.accountId, accountId);
   });
 
+  const sessionScope = input.cfg.session?.scope;
+  const isGlobalScope = sessionScope === "global";
   const dmScope = input.cfg.session?.dmScope ?? "main";
   const identityLinks = input.cfg.session?.identityLinks;
 
   const choose = (agentId: string, matchedBy: ResolvedAgentRoute["matchedBy"]) => {
     const resolvedAgentId = pickFirstExistingAgentId(input.cfg, agentId);
-    const sessionKey = buildAgentSessionKey({
-      agentId: resolvedAgentId,
-      channel,
-      accountId,
-      peer,
-      dmScope,
-      identityLinks,
-    }).toLowerCase();
     const mainSessionKey = buildAgentMainSessionKey({
       agentId: resolvedAgentId,
       mainKey: DEFAULT_MAIN_KEY,
     }).toLowerCase();
+    // When session.scope=global, all messages route to the main session
+    const sessionKey = isGlobalScope
+      ? mainSessionKey
+      : buildAgentSessionKey({
+          agentId: resolvedAgentId,
+          channel,
+          accountId,
+          peer,
+          dmScope,
+          identityLinks,
+        }).toLowerCase();
     return {
       agentId: resolvedAgentId,
       channel,
