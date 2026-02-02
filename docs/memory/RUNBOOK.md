@@ -438,6 +438,25 @@ scripts/restore-openclaw.sh --profile default
 launchctl load ~/Library/LaunchAgents/com.moltbot.backup.dev.plist
 ```
 
+### Deployment Verification (2026-02-02)
+
+**Branch:** `release/memory-v1` → `~/openclaw-prod`
+**Commit:** `419135dc9`
+
+**Verified:**
+- Gateway startup: ✓ listening on port 18789
+- Telegram: ✓ @SergioQuesada_bot running
+- Cron jobs: ✓ 6 jobs, all status "ok"
+- Memory facts: ✓ healthy
+- Critical config keys: ✓ all protected keys present
+
+**Key fixes deployed:**
+- pi-packages 0.51.0 (API compatibility)
+- 27 recovery tests (config guardrails verified)
+- Config protection for `gateway.mode`, `auth.token`, `TELEGRAM_BOT_TOKEN`
+
+---
+
 ### Verification Report (2026-02-01)
 
 **Goal:** Validate full backup/restore coverage including sessions history.

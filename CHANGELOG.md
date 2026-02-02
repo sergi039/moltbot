@@ -4,6 +4,10 @@ Docs: https://docs.openclaw.ai
 
 ## 2026.2.2
 
+- Config: add guardrails protecting critical keys (`gateway.mode`, `gateway.auth.token`, `env.TELEGRAM_BOT_TOKEN`) from accidental deletion during config writes.
+- Test: add recovery/backup test suite (27 tests) verifying backup completeness and config restoration.
+- Agents: update pi-packages to 0.51.0 with corrected `execute()` signature.
+
 ### Fixes
 
 - Security: guard skill installer downloads with SSRF checks (block private/localhost URLs).
