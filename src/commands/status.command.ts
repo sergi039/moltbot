@@ -78,6 +78,7 @@ export async function statusCommand(
     summary,
     memory,
     memoryPlugin,
+    factsMemory,
   } = scan;
 
   const securityAudit = await withProgress(
@@ -143,6 +144,7 @@ export async function statusCommand(
           updateChannelSource: channelInfo.source,
           memory,
           memoryPlugin,
+          factsMemory,
           gateway: {
             mode: gatewayMode,
             url: gatewayConnection.url,
@@ -321,6 +323,20 @@ export async function statusCommand(
     return parts.join(" · ");
   })();
 
+  const factsMemoryValue = (() => {
+    if (!factsMemory) return muted("disabled");
+    const statusColor =
+      factsMemory.status === "ok" ? ok : factsMemory.status === "warning" ? warn : theme.error;
+    const parts: string[] = [];
+    parts.push(`${factsMemory.totalMemories} facts`);
+    parts.push(`${factsMemory.dbSizeMb.toFixed(1)} MB`);
+    if (factsMemory.alertCount > 0) {
+      parts.push(warn(`${factsMemory.alertCount} alert${factsMemory.alertCount > 1 ? "s" : ""}`));
+    }
+    const statusLabel = statusColor(factsMemory.status.toUpperCase());
+    return `${statusLabel} · ${parts.join(" · ")}`;
+  })();
+
   const updateAvailability = resolveUpdateAvailability(update);
   const updateLine = formatUpdateOneLiner(update).replace(/^Update:\s*/i, "");
   const channelLabel = formatUpdateChannelLabel({
@@ -368,6 +384,7 @@ export async function statusCommand(
     { Item: "Node service", Value: nodeDaemonValue },
     { Item: "Agents", Value: agentsValue },
     { Item: "Memory", Value: memoryValue },
+    { Item: "Facts Memory", Value: factsMemoryValue },
     { Item: "Probes", Value: probesValue },
     { Item: "Events", Value: eventsValue },
     { Item: "Heartbeat", Value: heartbeatValue },

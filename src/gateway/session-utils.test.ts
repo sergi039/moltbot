@@ -65,6 +65,20 @@ describe("gateway session utils", () => {
     );
   });
 
+  test("resolveSessionStoreKey normalizes legacy 2-part keys", () => {
+    // Legacy keys like "agent:main" should be normalized to "agent:main:main"
+    const cfg = {
+      session: { mainKey: "main" },
+      agents: { list: [{ id: "ops", default: true }] },
+    } as OpenClawConfig;
+    expect(resolveSessionStoreKey({ cfg, sessionKey: "agent:main" })).toBe("agent:main:main");
+    expect(resolveSessionStoreKey({ cfg, sessionKey: "agent:ops" })).toBe("agent:ops:main");
+    // 3-part keys should remain unchanged
+    expect(resolveSessionStoreKey({ cfg, sessionKey: "agent:ops:custom" })).toBe(
+      "agent:ops:custom",
+    );
+  });
+
   test("resolveSessionStoreKey honors global scope", () => {
     const cfg = {
       session: { scope: "global", mainKey: "work" },

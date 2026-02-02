@@ -1,6 +1,7 @@
 ---
 name: session-logs
 description: Search and analyze your own session logs (older/parent conversations) using jq.
+long_description: "Full-text search and analysis across all conversation history stored in session JSONL files. Query messages by role (user/assistant), extract costs and token usage, find tool calls, search keywords across sessions, and compute daily cost summaries. Requires jq and ripgrep (rg) for efficient JSONL parsing."
 metadata: { "openclaw": { "emoji": "📜", "requires": { "bins": ["jq", "rg"] } } }
 ---
 

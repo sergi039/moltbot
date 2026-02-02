@@ -308,7 +308,7 @@ export function registerConfigCli(program: Command) {
         const snapshot = await loadValidConfig();
         const next = snapshot.config as Record<string, unknown>;
         setAtPath(next, parsedPath, parsedValue);
-        await writeConfigFile(next);
+        await writeConfigFile(next, { source: "cli:config.set" });
         defaultRuntime.log(info(`Updated ${path}. Restart the gateway to apply.`));
       } catch (err) {
         defaultRuntime.error(danger(String(err)));
@@ -334,7 +334,7 @@ export function registerConfigCli(program: Command) {
           defaultRuntime.exit(1);
           return;
         }
-        await writeConfigFile(next);
+        await writeConfigFile(next, { source: "cli:config.unset" });
         defaultRuntime.log(info(`Removed ${path}. Restart the gateway to apply.`));
       } catch (err) {
         defaultRuntime.error(danger(String(err)));

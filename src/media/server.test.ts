@@ -49,6 +49,9 @@ describe("media server", () => {
     const res = await fetch(`http://localhost:${port}/media/file1`);
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("hello");
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(res.headers.get("content-security-policy")).toBe("default-src 'none'");
+    expect(res.headers.get("x-frame-options")).toBe("DENY");
     await waitForFileRemoval(file);
     await new Promise((r) => server.close(r));
   });

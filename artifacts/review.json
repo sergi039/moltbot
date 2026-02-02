@@ -1,0 +1,79 @@
+{
+  "version": "1.0",
+  "reviewedAt": "2025-02-14T09:55:00Z",
+  "reviewer": "codex",
+  "overallScore": 52,
+  "approved": false,
+  "summary": "The new workflow system lays solid groundwork, but critical runtime bugs in persistence, handoff iteration tracking, and the finalize phase prevent successful end-to-end runs.",
+  "scores": {
+    "architecture": 55,
+    "codeQuality": 50,
+    "testCoverage": 45,
+    "security": 60,
+    "documentation": 50
+  },
+  "issues": [
+    {
+      "id": "issue-1",
+      "severity": "high",
+      "category": "runtime",
+      "file": "src/workflows/state/persistence.ts",
+      "line": 308,
+      "description": "computeStateChecksum() calls require(\"node:crypto\") inside an ESM module, but require is undefined in this codebase. Any call to computeStateChecksum/verifyStateChecksum/saveStateWithChecksum will throw, so tamper detection cannot work and resumptions that rely on it fail immediately.",
+      "suggestion": "Import createHash via ES modules (e.g. `import { createHash } from \"node:crypto\";`) at the top of the file and reuse that binding inside computeStateChecksum instead of calling require at runtime."
+    },
+    {
+      "id": "issue-2",
+      "severity": "high",
+      "category": "logic",
+      "file": "src/workflows/agents/handoff.ts",
+      "line": 74,
+      "description": "createHandoffPackage determines the previous iteration number via `run.phaseHistory.filter(...).length`, which is just the count of completed executions, not the iteration value of the latest entry. After a plan-review loop (e.g. planning iterations 1 and 3), the handoff copies artifacts from iteration 2 (which does not exist) so downstream phases receive empty inputs and fail validation.",
+      "suggestion": "When copying input artifacts, locate the actual last completed execution for previousPhase (e.g. by sorting/filtering and taking the max iteration value) and pass that iteration into loadArtifact."
+    },
+    {
+      "id": "issue-3",
+      "severity": "medium",
+      "category": "architecture",
+      "file": "src/workflows/agents/handoff.ts",
+      "line": 103,
+      "description": "buildHandoffContext/detectChangesInScope always inspect `run.workspace.targetRepo`, but for worktree/copy modes the live workspace is `~/.clawdbot/workflows/<id>/workspace`. As soon as the workflow edits files in the isolated workspace, the git status and relevant-files list in the handoff are stale or empty, so reviewers never see the actual changes made by earlier phases.",
+      "suggestion": "Thread the effective workspace path (the one used by the current phase) into buildHandoffContext/detectChangesInScope and run git status/project detection there instead of against targetRepo."
+    },
+    {
+      "id": "issue-4",
+      "severity": "high",
+      "category": "logic",
+      "file": "src/workflows/index.ts",
+      "line": 462,
+      "description": "The DEV_CYCLE_WORKFLOW finalize phase is configured to use the ExecutorEngine but declares outputArtifacts [final-report.md, changelog.md]. ExecutorEngine always writes tasks.json + execution-report.json, so finalize can never satisfy validation and the workflow will stop one phase short of completion.",
+      "suggestion": "Either implement a dedicated FinalizeEngine that emits final-report.md/changelog.md or change the finalize phase's engine/outputArtifacts to match what ExecutorEngine can actually produce."
+    }
+  ],
+  "recommendations": [
+    {
+      "id": "rec-1",
+      "priority": "must",
+      "description": "Fix the finalize phase so it produces the promised final-report.md and changelog.md artifacts (new engine or different configuration).",
+      "rationale": "Without this change the standard workflow can never reach a completed state because phase validation always fails."
+    },
+    {
+      "id": "rec-2",
+      "priority": "must",
+      "description": "Track the actual iteration number of the previous phase when building handoff packages and copy artifacts from that iteration instead of using the completion count.",
+      "rationale": "Review and execution phases currently receive empty/mismatched artifacts after multiple iterations, blocking plan-review loops."
+    },
+    {
+      "id": "rec-3",
+      "priority": "should",
+      "description": "Use the effective workspace path (worktree/copy dir) when gathering project context and git status for handoff metadata.",
+      "rationale": "Review handoffs miss the real changes made in isolated workspaces, so reviewers cannot see what actually changed."
+    },
+    {
+      "id": "rec-4",
+      "priority": "should",
+      "description": "Switch computeStateChecksum to an ESM import so the tamper-detection helpers can run without throwing.",
+      "rationale": "All checksum-related helpers currently crash before performing any work, so persistence integrity checks are non-functional."
+    }
+  ]
+}

@@ -69,6 +69,8 @@ function buildSandboxBrowserResolvedConfig(params: {
         color: DEFAULT_OPENCLAW_BROWSER_COLOR,
       },
     },
+    // Sandbox browser has its own file isolation; no host path restrictions needed
+    uploadAllowlist: [],
   };
 }
 

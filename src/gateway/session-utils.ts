@@ -185,6 +185,14 @@ export function loadSessionEntry(sessionKey: string) {
   const storePath = resolveStorePath(sessionCfg?.store, { agentId });
   const store = loadSessionStore(storePath);
   const entry = store[canonicalKey];
+
+  // P0 diagnostics: log session key resolution
+  if (sessionKey !== canonicalKey) {
+    console.log(
+      `[session-resolve] requested="${sessionKey}" → canonical="${canonicalKey}" agentId="${agentId}" exists=${!!entry}`,
+    );
+  }
+
   return { cfg, storePath, store, entry, canonicalKey };
 }
 
@@ -368,6 +376,15 @@ export function resolveSessionStoreKey(params: {
     return raw;
   }
 
+  // Handle legacy 2-part format: "agent:X" → "agent:X:main"
+  // This normalizes old session keys that were written without the mainKey component
+  const parts = raw.split(":").filter(Boolean);
+  if (parts.length === 2 && parts[0] === "agent") {
+    const agentId = normalizeAgentId(parts[1]);
+    const mainKey = normalizeMainKey(params.cfg.session?.mainKey);
+    return `agent:${agentId}:${mainKey}`;
+  }
+
   const rawMainKey = normalizeMainKey(params.cfg.session?.mainKey);
   if (raw === "main" || raw === rawMainKey) {
     return resolveMainSessionKey(params.cfg);
@@ -547,7 +564,8 @@ export function listSessionsFromStore(params: {
   const { cfg, storePath, store, opts } = params;
   const now = Date.now();
 
-  const includeGlobal = opts.includeGlobal === true;
+  // Auto-include global session when session.scope=global is configured
+  const includeGlobal = opts.includeGlobal === true || cfg.session?.scope === "global";
   const includeUnknown = opts.includeUnknown === true;
   const includeDerivedTitles = opts.includeDerivedTitles === true;
   const includeLastMessage = opts.includeLastMessage === true;

@@ -62,6 +62,38 @@ export type GatewayBrowserClientOptions = {
 // 4008 = application-defined code (browser rejects 1008 "Policy Violation")
 const CONNECT_FAILED_CLOSE_CODE = 4008;
 
+/**
+ * Generate a human-readable display name from browser/platform info.
+ * Examples: "Chrome on Mac", "Safari on iPhone", "Firefox on Windows"
+ */
+function generateClientDisplayName(clientId?: string): string {
+  // For native apps, use their ID as base
+  if (clientId === GATEWAY_CLIENT_NAMES.MACOS_APP) return "OpenClaw for Mac";
+  if (clientId === GATEWAY_CLIENT_NAMES.IOS_APP) return "OpenClaw for iOS";
+  if (clientId === GATEWAY_CLIENT_NAMES.ANDROID_APP) return "OpenClaw for Android";
+  if (clientId === GATEWAY_CLIENT_NAMES.CLI) return "OpenClaw CLI";
+  if (clientId === GATEWAY_CLIENT_NAMES.NODE_HOST) return "Node Host";
+
+  // For browser clients, detect browser and OS
+  const ua = navigator.userAgent;
+  let browser = "Browser";
+  if (ua.includes("Edg/")) browser = "Edge";
+  else if (ua.includes("Chrome/")) browser = "Chrome";
+  else if (ua.includes("Firefox/")) browser = "Firefox";
+  else if (ua.includes("Safari/") && !ua.includes("Chrome")) browser = "Safari";
+
+  const platform = navigator.platform ?? "";
+  let os = "Web";
+  if (platform.startsWith("Mac") || ua.includes("Macintosh")) os = "Mac";
+  else if (platform.startsWith("Win") || ua.includes("Windows")) os = "Windows";
+  else if (platform.startsWith("Linux") || ua.includes("Linux")) os = "Linux";
+  else if (ua.includes("iPhone")) os = "iPhone";
+  else if (ua.includes("iPad")) os = "iPad";
+  else if (ua.includes("Android")) os = "Android";
+
+  return `${browser} on ${os}`;
+}
+
 export class GatewayBrowserClient {
   private ws: WebSocket | null = null;
   private pending = new Map<string, Pending>();
@@ -195,11 +227,13 @@ export class GatewayBrowserClient {
         nonce,
       };
     }
+    const clientId = this.opts.clientName ?? GATEWAY_CLIENT_NAMES.CONTROL_UI;
     const params = {
       minProtocol: 3,
       maxProtocol: 3,
       client: {
-        id: this.opts.clientName ?? GATEWAY_CLIENT_NAMES.CONTROL_UI,
+        id: clientId,
+        displayName: generateClientDisplayName(clientId),
         version: this.opts.clientVersion ?? "dev",
         platform: this.opts.platform ?? navigator.platform ?? "web",
         mode: this.opts.mode ?? GATEWAY_CLIENT_MODES.WEBCHAT,

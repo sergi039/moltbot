@@ -224,6 +224,14 @@ const entries: SubCliEntry[] = [
     },
   },
   {
+    name: "workflow",
+    description: "Multi-agent workflow automation",
+    register: async (program) => {
+      const mod = await import("../workflow-cli.js");
+      mod.registerWorkflowCli(program);
+    },
+  },
+  {
     name: "update",
     description: "CLI update helpers",
     register: async (program) => {

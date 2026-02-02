@@ -301,9 +301,7 @@ export function renderCron(props: CronProps) {
               <div class="muted" style="margin-top: 12px">Select a job to inspect run history.</div>
             `
           : props.runs.length === 0
-            ? html`
-                <div class="muted" style="margin-top: 12px">No runs yet.</div>
-              `
+            ? renderNoRunsYet(props)
             : html`
               <div class="list" style="margin-top: 12px;">
                 ${props.runs.map((entry) => renderRun(entry))}
@@ -383,9 +381,15 @@ function renderScheduleFields(props: CronProps) {
   `;
 }
 
+/** P1: Check if job is silent (deliver:false) */
+function isSilentJob(job: CronJob): boolean {
+  return job.payload.kind === "agentTurn" && job.payload.deliver === false;
+}
+
 function renderJob(job: CronJob, props: CronProps) {
   const isSelected = props.runsJobId === job.id;
   const itemClass = `list-item list-item-clickable${isSelected ? " list-item-selected" : ""}`;
+  const silent = isSilentJob(job);
   return html`
     <div class=${itemClass} @click=${() => props.onLoadRuns(job.id)}>
       <div class="list-main">
@@ -393,6 +397,7 @@ function renderJob(job: CronJob, props: CronProps) {
         <div class="list-sub">${formatCronSchedule(job)}</div>
         <div class="muted">${formatCronPayload(job)}</div>
         ${job.agentId ? html`<div class="muted">Agent: ${job.agentId}</div>` : nothing}
+        ${silent ? html`<div class="muted" style="font-style: italic;">🔇 Silent (no output unless thresholds triggered)</div>` : nothing}
         <div class="chip-row" style="margin-top: 6px;">
           <span class="chip">${job.enabled ? "enabled" : "disabled"}</span>
           <span class="chip">${job.sessionTarget}</span>
@@ -444,6 +449,19 @@ function renderJob(job: CronJob, props: CronProps) {
           </button>
         </div>
       </div>
+    </div>
+  `;
+}
+
+/** P2: Render "No runs yet" with next run time */
+function renderNoRunsYet(props: CronProps) {
+  const selectedJob = props.jobs.find((j) => j.id === props.runsJobId);
+  const nextRunAtMs = selectedJob?.state?.nextRunAtMs;
+  return html`
+    <div class="muted" style="margin-top: 12px">
+      <div>No runs yet.</div>
+      ${nextRunAtMs ? html`<div style="margin-top: 4px;">Next run: ${formatNextRun(nextRunAtMs)}</div>` : nothing}
+      ${selectedJob && !selectedJob.enabled ? html`<div style="margin-top: 4px; color: var(--color-warning);">⚠ Job is disabled</div>` : nothing}
     </div>
   `;
 }

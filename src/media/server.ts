@@ -60,6 +60,9 @@ export function attachMediaRoutes(
       if (mime) {
         res.type(mime);
       }
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Content-Security-Policy", "default-src 'none'");
+      res.setHeader("X-Frame-Options", "DENY");
       res.send(data);
       // best-effort single-use cleanup after response ends
       res.on("finish", () => {

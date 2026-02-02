@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.moltbot.gateway</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/ss/moltbot/scripts/gateway-preflight.sh</string>
+        <string>--start</string>
+        <string>--port</string>
+        <string>18789</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>OPENCLAW_STATE_DIR</key>
+        <string>/Users/ss/.openclaw</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:/Users/ss/Library/pnpm</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/ss/moltbot</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <!-- Only restart if exit code is 0 (config was valid but gateway crashed) -->
+        <!-- If exit code is 1 (config invalid), do NOT restart to avoid infinite loop -->
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/moltbot-gateway.stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/moltbot-gateway.stderr.log</string>
+
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+</dict>
+</plist>

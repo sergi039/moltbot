@@ -235,6 +235,62 @@ function newToken() {
   return randomUUID().replaceAll("-", "");
 }
 
+/**
+ * Generate a human-readable display name from client info.
+ * Used as fallback when client doesn't provide displayName.
+ */
+function generateDisplayName(opts: {
+  displayName?: string;
+  clientId?: string;
+  platform?: string;
+  clientMode?: string;
+}): string | undefined {
+  // Use provided displayName if available
+  if (opts.displayName?.trim()) {
+    return opts.displayName.trim();
+  }
+
+  // Generate from clientId
+  const clientId = opts.clientId?.trim().toLowerCase();
+  if (clientId) {
+    // Map known client IDs to friendly names
+    const clientNames: Record<string, string> = {
+      "openclaw-control-ui": "Control Panel",
+      "webchat-ui": "Web Chat",
+      webchat: "Web Chat",
+      cli: "CLI",
+      "gateway-client": "Gateway Client",
+      "openclaw-macos": "OpenClaw for Mac",
+      "openclaw-ios": "OpenClaw for iOS",
+      "openclaw-android": "OpenClaw for Android",
+      "node-host": "Node Host",
+      "openclaw-probe": "Probe",
+    };
+    const baseName = clientNames[clientId] ?? clientId;
+
+    // Add platform info if available
+    const platform = opts.platform?.trim();
+    if (platform) {
+      // Normalize platform names
+      let os = platform;
+      if (platform.startsWith("Mac") || platform.includes("Macintosh")) os = "Mac";
+      else if (platform.startsWith("Win") || platform.includes("Windows")) os = "Windows";
+      else if (platform.startsWith("Linux")) os = "Linux";
+      else if (platform.includes("iPhone")) os = "iPhone";
+      else if (platform.includes("iPad")) os = "iPad";
+      else if (platform.includes("Android")) os = "Android";
+
+      // Don't repeat platform if already in the name
+      if (!baseName.toLowerCase().includes(os.toLowerCase())) {
+        return `${baseName} (${os})`;
+      }
+    }
+    return baseName;
+  }
+
+  return undefined;
+}
+
 export async function listDevicePairing(baseDir?: string): Promise<DevicePairingList> {
   const state = await loadState(baseDir);
   const pending = Object.values(state.pendingById).toSorted((a, b) => b.ts - a.ts);
@@ -271,11 +327,18 @@ export async function requestDevicePairing(
       return { status: "pending", request: existing, created: false };
     }
     const isRepair = Boolean(state.pairedByDeviceId[deviceId]);
+    // Generate displayName if not provided
+    const resolvedDisplayName = generateDisplayName({
+      displayName: req.displayName,
+      clientId: req.clientId,
+      platform: req.platform,
+      clientMode: req.clientMode,
+    });
     const request: DevicePairingPendingRequest = {
       requestId: randomUUID(),
       deviceId,
       publicKey: req.publicKey,
-      displayName: req.displayName,
+      displayName: resolvedDisplayName,
       platform: req.platform,
       clientId: req.clientId,
       clientMode: req.clientMode,
@@ -555,4 +618,42 @@ export async function revokeDeviceToken(params: {
     await persistState(state, params.baseDir);
     return entry;
   });
+}
+
+/**
+ * Resolve a device token by its value (without knowing deviceId).
+ * Used for HTTP API auth where only the bearer token is available.
+ * Returns device info and token details if found and not revoked.
+ */
+export type ResolvedDeviceToken = {
+  deviceId: string;
+  displayName?: string;
+  role: string;
+  scopes: string[];
+  token: DeviceAuthToken;
+};
+
+export async function resolveDeviceTokenByValue(
+  tokenValue: string,
+  baseDir?: string,
+): Promise<ResolvedDeviceToken | null> {
+  const state = await loadState(baseDir);
+
+  for (const device of Object.values(state.pairedByDeviceId)) {
+    if (!device.tokens) continue;
+
+    for (const [role, tokenEntry] of Object.entries(device.tokens)) {
+      if (tokenEntry.token === tokenValue && !tokenEntry.revokedAtMs) {
+        return {
+          deviceId: device.deviceId,
+          displayName: device.displayName,
+          role,
+          scopes: tokenEntry.scopes,
+          token: tokenEntry,
+        };
+      }
+    }
+  }
+
+  return null;
 }

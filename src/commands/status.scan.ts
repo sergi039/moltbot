@@ -8,6 +8,12 @@ import { probeGateway } from "../gateway/probe.js";
 import { collectChannelStatusIssues } from "../infra/channels-status-issues.js";
 import { resolveOsSummary } from "../infra/os-summary.js";
 import { getTailnetHostname } from "../infra/tailscale.js";
+import {
+  createFactsMemoryManager,
+  getHealthSummary,
+  type HealthSnapshot,
+  type HealthAlert,
+} from "../memory/facts/index.js";
 import { runExec } from "../process/exec.js";
 import { buildChannelsTable } from "./status-all/channels.js";
 import { getAgentLocalStatuses } from "./status.agent-local.js";
@@ -25,11 +31,19 @@ type MemoryPluginStatus = {
   reason?: string;
 };
 
+type FactsMemoryHealthStatus = {
+  enabled: boolean;
+  dbSizeMb: number;
+  totalMemories: number;
+  extractionErrors: number;
+  lastExtractionAt: string | null;
+  alertCount: number;
+  status: "ok" | "warning" | "critical";
+} | null;
+
 function resolveMemoryPluginStatus(cfg: ReturnType<typeof loadConfig>): MemoryPluginStatus {
   const pluginsEnabled = cfg.plugins?.enabled !== false;
-  if (!pluginsEnabled) {
-    return { enabled: false, slot: null, reason: "plugins disabled" };
-  }
+  if (!pluginsEnabled) return { enabled: false, slot: null, reason: "plugins disabled" };
   const raw = typeof cfg.plugins?.slots?.memory === "string" ? cfg.plugins.slots.memory.trim() : "";
   if (raw && raw.toLowerCase() === "none") {
     return { enabled: false, slot: null, reason: 'plugins.slots.memory="none"' };
@@ -56,6 +70,7 @@ export type StatusScanResult = {
   summary: Awaited<ReturnType<typeof getStatusSummary>>;
   memory: MemoryStatusSnapshot | null;
   memoryPlugin: MemoryPluginStatus;
+  factsMemory: FactsMemoryHealthStatus;
 };
 
 export async function scanStatus(
@@ -127,7 +142,7 @@ export async function scanStatus(
 
       progress.setLabel("Querying channel status…");
       const channelsStatus = gatewayReachable
-        ? await callGateway({
+        ? await callGateway<Record<string, unknown>>({
             method: "channels.status",
             params: {
               probe: false,
@@ -150,24 +165,44 @@ export async function scanStatus(
       progress.setLabel("Checking memory…");
       const memoryPlugin = resolveMemoryPluginStatus(cfg);
       const memory = await (async (): Promise<MemoryStatusSnapshot | null> => {
-        if (!memoryPlugin.enabled) {
-          return null;
-        }
-        if (memoryPlugin.slot !== "memory-core") {
-          return null;
-        }
+        if (!memoryPlugin.enabled) return null;
+        if (memoryPlugin.slot !== "memory-core") return null;
         const agentId = agentStatus.defaultId ?? "main";
         const { MemoryIndexManager } = await import("../memory/manager.js");
         const manager = await MemoryIndexManager.get({ cfg, agentId }).catch(() => null);
-        if (!manager) {
-          return null;
-        }
+        if (!manager) return null;
         try {
           await manager.probeVectorAvailability();
         } catch {}
         const status = manager.status();
         await manager.close().catch(() => {});
         return { agentId, ...status };
+      })();
+
+      // Check facts memory health
+      const factsMemory = ((): FactsMemoryHealthStatus => {
+        const factsConfig = cfg.factsMemory;
+        if (factsConfig?.enabled === false) return null;
+        try {
+          const manager = createFactsMemoryManager(factsConfig ?? {});
+          const summary = getHealthSummary(
+            manager.getStore(),
+            manager.getMarkdownPath(),
+            factsConfig,
+          );
+          manager.close().catch(() => {});
+          return {
+            enabled: true,
+            dbSizeMb: summary.snapshot.dbSizeMb,
+            totalMemories: summary.snapshot.totalMemories,
+            extractionErrors: summary.snapshot.extractionErrors,
+            lastExtractionAt: summary.snapshot.lastExtractionAt,
+            alertCount: summary.activeAlerts.length,
+            status: summary.status,
+          };
+        } catch {
+          return null;
+        }
       })();
       progress.tick();
 
@@ -197,6 +232,7 @@ export async function scanStatus(
         summary,
         memory,
         memoryPlugin,
+        factsMemory,
       };
     },
   );

@@ -11,6 +11,7 @@ import { createOpenClawTools } from "../../agents/openclaw-tools.js";
 import { getChannelDock } from "../../channels/dock.js";
 import { logVerbose } from "../../globals.js";
 import { resolveGatewayMessageChannel } from "../../utils/message-channel.js";
+import { detectWorkflowIntent, suggestWorkflowCommand } from "../../workflows/intent-router.js";
 import { listSkillCommandsForWorkspace, resolveSkillCommandInvocation } from "../skill-commands.js";
 import { getAbortMemory } from "./abort.js";
 import { buildStatusReply, handleCommands } from "./commands.js";
@@ -134,6 +135,42 @@ export async function handleInlineActions(params: {
 
   let directives = initialDirectives;
   let cleanedBody = initialCleanedBody;
+
+  // Workflow intent routing
+  const workflowRouting = cfg.workflows?.routing;
+  if (workflowRouting?.enabled && command.isAuthorizedSender) {
+    const intent = detectWorkflowIntent(cleanedBody);
+    const minConfidence = workflowRouting.minConfidence ?? 0.7;
+
+    if (intent.type && intent.confidence >= minConfidence) {
+      if (workflowRouting.autoStart) {
+        // Rewrite body to invoke workflow skill
+        const rewrittenBody = [
+          `Use the "multi-agent-workflow" skill for this request.`,
+          `Workflow type: ${intent.type}`,
+          intent.task ? `Task: ${intent.task}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n");
+        ctx.Body = rewrittenBody;
+        ctx.BodyForAgent = rewrittenBody;
+        sessionCtx.Body = rewrittenBody;
+        sessionCtx.BodyForAgent = rewrittenBody;
+        sessionCtx.BodyStripped = rewrittenBody;
+        cleanedBody = rewrittenBody;
+      } else {
+        // Return suggestion reply
+        const suggestion = suggestWorkflowCommand(intent);
+        typing.cleanup();
+        return {
+          kind: "reply",
+          reply: {
+            text: `🔄 Detected workflow intent: **${intent.type}** (confidence: ${Math.round(intent.confidence * 100)}%)\n\n${suggestion ? `To start: \`${suggestion}\`` : ""}`,
+          },
+        };
+      }
+    }
+  }
 
   const shouldLoadSkillCommands = command.commandBodyNormalized.startsWith("/");
   const skillCommands =

@@ -161,14 +161,22 @@ async function runGatewayCommand(opts: GatewayRunOpts) {
   const snapshot = await readConfigFileSnapshot().catch(() => null);
   const configExists = snapshot?.exists ?? fs.existsSync(CONFIG_PATH);
   const mode = cfg.gateway?.mode;
+  const authToken = cfg.gateway?.auth?.token;
+  const hasAuthToken = typeof authToken === "string" && authToken.trim().length > 0;
+
+  // Diagnostic logging for launchd/daemon troubleshooting
+  gatewayLog.info(
+    `config: mode=${mode ?? "unset"}, auth.token=${hasAuthToken ? "set" : "unset"}, configExists=${configExists}`,
+  );
+
   if (!opts.allowUnconfigured && mode !== "local") {
     if (!configExists) {
       defaultRuntime.error(
-        `Missing config. Run \`${formatCliCommand("openclaw setup")}\` or set gateway.mode=local (or pass --allow-unconfigured).`,
+        `[CONFIG_INVALID] Missing config. Run \`${formatCliCommand("openclaw setup")}\` or set gateway.mode=local (or pass --allow-unconfigured).`,
       );
     } else {
       defaultRuntime.error(
-        `Gateway start blocked: set gateway.mode=local (current: ${mode ?? "unset"}) or pass --allow-unconfigured.`,
+        `[CONFIG_INVALID] Gateway start blocked: set gateway.mode=local (current: ${mode ?? "unset"}) or pass --allow-unconfigured.`,
       );
     }
     defaultRuntime.exit(1);
@@ -220,7 +228,7 @@ async function runGatewayCommand(opts: GatewayRunOpts) {
   if (resolvedAuthMode === "token" && !hasToken && !resolvedAuth.allowTailscale) {
     defaultRuntime.error(
       [
-        "Gateway auth is set to token, but no token is configured.",
+        "[CONFIG_INVALID] Gateway auth is set to token, but no token is configured.",
         "Set gateway.auth.token (or OPENCLAW_GATEWAY_TOKEN), or pass --token.",
         ...authHints,
       ]
@@ -233,7 +241,7 @@ async function runGatewayCommand(opts: GatewayRunOpts) {
   if (resolvedAuthMode === "password" && !hasPassword) {
     defaultRuntime.error(
       [
-        "Gateway auth is set to password, but no password is configured.",
+        "[CONFIG_INVALID] Gateway auth is set to password, but no password is configured.",
         "Set gateway.auth.password (or OPENCLAW_GATEWAY_PASSWORD), or pass --password.",
         ...authHints,
       ]

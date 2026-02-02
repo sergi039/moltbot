@@ -1,8 +1,11 @@
-import { html } from "lit";
+import { html, nothing } from "lit";
+
 import type { GatewayHelloOk } from "../gateway";
-import type { UiSettings } from "../storage";
 import { formatAgo, formatDurationMs } from "../format";
 import { formatNextRun } from "../presenter";
+import type { UiSettings } from "../storage";
+import type { FactsMemoryStatus, TopFactItem, TraceResult } from "../controllers/facts-memory";
+import { renderFactsMemoryStatus, renderTopFacts, renderMemorySearch } from "./facts-memory";
 
 export type OverviewProps = {
   connected: boolean;
@@ -20,6 +23,41 @@ export type OverviewProps = {
   onSessionKeyChange: (next: string) => void;
   onConnect: () => void;
   onRefresh: () => void;
+  // Facts memory props
+  factsMemoryLoading: boolean;
+  factsMemoryStatus: FactsMemoryStatus | null;
+  factsMemoryError: string | null;
+  topFactsLoading: boolean;
+  topFacts: TopFactItem[];
+  topFactsError: string | null;
+  topFactsLimit: number;
+  topFactsTypeFilter: string | null;
+  onFactsMemoryRefresh: () => void;
+  onTopFactsRefresh: () => void;
+  onTopFactsLimitChange: (limit: number) => void;
+  onTopFactsTypeChange: (type: string | null) => void;
+  // Fact actions
+  onDeleteFact?: (factId: string) => void;
+  onUpdateFactImportance?: (factId: string, importance: number) => void;
+  // Edit state
+  editingFactId?: string | null;
+  editingImportance?: number;
+  onStartEditFact?: (factId: string, currentImportance: number) => void;
+  onCancelEditFact?: () => void;
+  onConfirmEditFact?: () => void;
+  onEditImportanceChange?: (importance: number) => void;
+  // Search state
+  searchQuery?: string;
+  searchLoading?: boolean;
+  searchResult?: TraceResult | null;
+  searchError?: string | null;
+  searchRole?: string;
+  searchLimit?: number;
+  onSearchQueryChange?: (query: string) => void;
+  onSearchRoleChange?: (role: string) => void;
+  onSearchLimitChange?: (limit: number) => void;
+  onSearch?: () => void;
+  onClearSearch?: () => void;
 };
 
 export function renderOverview(props: OverviewProps) {
@@ -27,7 +65,9 @@ export function renderOverview(props: OverviewProps) {
     | { uptimeMs?: number; policy?: { tickIntervalMs?: number } }
     | undefined;
   const uptime = snapshot?.uptimeMs ? formatDurationMs(snapshot.uptimeMs) : "n/a";
-  const tick = snapshot?.policy?.tickIntervalMs ? `${snapshot.policy.tickIntervalMs}ms` : "n/a";
+  const tick = snapshot?.policy?.tickIntervalMs
+    ? `${snapshot.policy.tickIntervalMs}ms`
+    : "n/a";
   const authHint = (() => {
     if (props.connected || !props.lastError) {
       return null;
@@ -41,13 +81,13 @@ export function renderOverview(props: OverviewProps) {
     const hasPassword = Boolean(props.password.trim());
     if (!hasToken && !hasPassword) {
       return html`
-        <div class="muted" style="margin-top: 8px">
+        <div class="muted" style="margin-top: 8px;">
           This gateway requires auth. Add a token or password, then click Connect.
-          <div style="margin-top: 6px">
+          <div style="margin-top: 6px;">
             <span class="mono">openclaw dashboard --no-open</span> → tokenized URL<br />
             <span class="mono">openclaw doctor --generate-gateway-token</span> → set token
           </div>
-          <div style="margin-top: 6px">
+          <div style="margin-top: 6px;">
             <a
               class="session-link"
               href="https://docs.openclaw.ai/web/dashboard"
@@ -61,10 +101,11 @@ export function renderOverview(props: OverviewProps) {
       `;
     }
     return html`
-      <div class="muted" style="margin-top: 8px">
+      <div class="muted" style="margin-top: 8px;">
         Auth failed. Re-copy a tokenized URL with
-        <span class="mono">openclaw dashboard --no-open</span>, or update the token, then click Connect.
-        <div style="margin-top: 6px">
+        <span class="mono">openclaw dashboard --no-open</span>, or update the token,
+        then click Connect.
+        <div style="margin-top: 6px;">
           <a
             class="session-link"
             href="https://docs.openclaw.ai/web/dashboard"
@@ -90,14 +131,14 @@ export function renderOverview(props: OverviewProps) {
       return null;
     }
     return html`
-      <div class="muted" style="margin-top: 8px">
-        This page is HTTP, so the browser blocks device identity. Use HTTPS (Tailscale Serve) or open
-        <span class="mono">http://127.0.0.1:18789</span> on the gateway host.
-        <div style="margin-top: 6px">
+      <div class="muted" style="margin-top: 8px;">
+        This page is HTTP, so the browser blocks device identity. Use HTTPS (Tailscale Serve) or
+        open <span class="mono">http://127.0.0.1:18789</span> on the gateway host.
+        <div style="margin-top: 6px;">
           If you must stay on HTTP, set
           <span class="mono">gateway.controlUi.allowInsecureAuth: true</span> (token-only).
         </div>
-        <div style="margin-top: 6px">
+        <div style="margin-top: 6px;">
           <a
             class="session-link"
             href="https://docs.openclaw.ai/gateway/tailscale"
@@ -199,23 +240,21 @@ export function renderOverview(props: OverviewProps) {
           <div class="stat">
             <div class="stat-label">Last Channels Refresh</div>
             <div class="stat-value">
-              ${props.lastChannelsRefresh ? formatAgo(props.lastChannelsRefresh) : "n/a"}
+              ${props.lastChannelsRefresh
+                ? formatAgo(props.lastChannelsRefresh)
+                : "n/a"}
             </div>
           </div>
         </div>
-        ${
-          props.lastError
-            ? html`<div class="callout danger" style="margin-top: 14px;">
+        ${props.lastError
+          ? html`<div class="callout danger" style="margin-top: 14px;">
               <div>${props.lastError}</div>
               ${authHint ?? ""}
               ${insecureContextHint ?? ""}
             </div>`
-            : html`
-                <div class="callout" style="margin-top: 14px">
-                  Use Channels to link WhatsApp, Telegram, Discord, Signal, or iMessage.
-                </div>
-              `
-        }
+          : html`<div class="callout" style="margin-top: 14px;">
+              Use Channels to link WhatsApp, Telegram, Discord, Signal, or iMessage.
+            </div>`}
       </div>
     </section>
 
@@ -233,7 +272,11 @@ export function renderOverview(props: OverviewProps) {
       <div class="card stat-card">
         <div class="stat-label">Cron</div>
         <div class="stat-value">
-          ${props.cronEnabled == null ? "n/a" : props.cronEnabled ? "Enabled" : "Disabled"}
+          ${props.cronEnabled == null
+            ? "n/a"
+            : props.cronEnabled
+              ? "Enabled"
+              : "Disabled"}
         </div>
         <div class="muted">Next wake ${formatNextRun(props.cronNext)}</div>
       </div>
@@ -259,5 +302,54 @@ export function renderOverview(props: OverviewProps) {
         </div>
       </div>
     </section>
+
+    <section class="grid grid-cols-2" style="margin-top: 18px;">
+      ${renderFactsMemoryStatus({
+        loading: props.factsMemoryLoading,
+        status: props.factsMemoryStatus,
+        error: props.factsMemoryError,
+        onRefresh: props.onFactsMemoryRefresh,
+      })}
+      ${renderTopFacts({
+        loading: props.topFactsLoading,
+        facts: props.topFacts,
+        error: props.topFactsError,
+        limit: props.topFactsLimit,
+        typeFilter: props.topFactsTypeFilter,
+        onRefresh: props.onTopFactsRefresh,
+        onLimitChange: props.onTopFactsLimitChange,
+        onTypeChange: props.onTopFactsTypeChange,
+        // Actions
+        onDelete: props.onDeleteFact,
+        onUpdateImportance: props.onUpdateFactImportance,
+        // Edit state
+        editingFactId: props.editingFactId,
+        editingImportance: props.editingImportance,
+        onStartEdit: props.onStartEditFact,
+        onCancelEdit: props.onCancelEditFact,
+        onConfirmEdit: props.onConfirmEditFact,
+        onEditImportanceChange: props.onEditImportanceChange,
+      })}
+    </section>
+
+    ${props.onSearch
+      ? html`
+          <section style="margin-top: 18px;">
+            ${renderMemorySearch({
+              loading: props.searchLoading ?? false,
+              query: props.searchQuery ?? "",
+              role: props.searchRole ?? "operator",
+              limit: props.searchLimit ?? 10,
+              result: props.searchResult ?? null,
+              error: props.searchError ?? null,
+              onQueryChange: props.onSearchQueryChange ?? (() => {}),
+              onRoleChange: props.onSearchRoleChange ?? (() => {}),
+              onLimitChange: props.onSearchLimitChange ?? (() => {}),
+              onSearch: props.onSearch,
+              onClear: props.onClearSearch ?? (() => {}),
+            })}
+          </section>
+        `
+      : nothing}
   `;
 }

@@ -95,6 +95,179 @@ export type OpenClawConfig = {
   canvasHost?: CanvasHostConfig;
   talk?: TalkConfig;
   gateway?: GatewayConfig;
+  workflows?: WorkflowsConfig;
+  /** Facts memory system configuration. */
+  factsMemory?: FactsMemoryConfig;
+};
+
+export type FactsMemoryConfig = {
+  /** Whether the facts memory system is enabled. */
+  enabled?: boolean;
+  /** Path to SQLite database file. */
+  dbPath?: string;
+  /** Path to markdown files directory. */
+  markdownPath?: string;
+  /** Batch size for extraction. */
+  batchSize?: number;
+  /** Extraction settings. */
+  extraction?: {
+    /** Whether extraction is enabled. */
+    enabled?: boolean;
+    /** Provider for LLM extraction. */
+    provider?: string;
+    /** Model for LLM extraction. */
+    model?: string;
+  };
+  /** Scheduler settings for memory consolidation. */
+  scheduler?: {
+    /** Enable daily consolidation. */
+    dailyEnabled?: boolean;
+    /** Daily cron expression. */
+    dailyCron?: string;
+    /** Enable weekly consolidation. */
+    weeklyEnabled?: boolean;
+    /** Weekly cron expression. */
+    weeklyCron?: string;
+    /** Timezone for cron expressions. */
+    timezone?: string;
+  };
+  /** Embeddings settings for semantic search. */
+  embeddings?: {
+    /** Whether embeddings are enabled. */
+    enabled?: boolean;
+    /** Provider for embeddings (e.g., "openai"). */
+    provider?: string;
+    /** Model for embeddings. */
+    model?: string;
+    /** Enable fallback to stub embeddings when API unavailable. */
+    fallbackEnabled?: boolean;
+  };
+  /** Retention settings for cleanup. */
+  retention?: {
+    /** Maximum age in days for memories (older are deleted). */
+    maxAgeDays?: number;
+    /** Maximum database size in MB. */
+    maxSizeMb?: number;
+    /** Prune memories with low importance. */
+    pruneLowImportance?: boolean;
+    /** Minimum importance threshold (memories below are pruned). */
+    minImportance?: number;
+    /** Days after which daily/weekly summaries are truncated. */
+    truncateSummariesDays?: number;
+  };
+  /** Rate limits and guardrails. */
+  limits?: {
+    /** Maximum messages per extraction batch. */
+    maxMessages?: number;
+    /** Maximum facts per extraction. */
+    maxFacts?: number;
+    /** Maximum token budget per extraction. */
+    maxTokens?: number;
+    /** Cooldown between extractions in milliseconds. */
+    cooldownMs?: number;
+  };
+  /** Redaction settings for export and display. */
+  redaction?: {
+    /** Whether redaction is enabled by default. */
+    enabled?: boolean;
+    /** Redaction pattern types to apply. */
+    patterns?: (
+      | "EMAIL"
+      | "PHONE"
+      | "API_KEY"
+      | "JWT"
+      | "BEARER"
+      | "URL_CREDS"
+      | "IP_ADDRESS"
+      | "CREDIT_CARD"
+      | "SSN"
+    )[];
+  };
+  /** Access control settings for role-based visibility. */
+  access?: {
+    /** Whether access control is enabled. */
+    enabled?: boolean;
+    /** Default role when none specified. */
+    defaultRole?: "admin" | "operator" | "analyst" | "guest";
+    /** Custom role configurations. */
+    roles?: {
+      admin?: FactsMemoryRoleConfig;
+      operator?: FactsMemoryRoleConfig;
+      analyst?: FactsMemoryRoleConfig;
+      guest?: FactsMemoryRoleConfig;
+    };
+  };
+  /** Alert thresholds for health monitoring. */
+  alerts?: {
+    /** Maximum database size in MB before alert. */
+    maxDbSizeMb?: number;
+    /** Maximum extraction errors per day before alert. */
+    maxErrorsPerDay?: number;
+    /** Maximum days without extraction before stale alert. */
+    maxStaleDays?: number;
+    /** Whether to run daily health checks. */
+    healthCheckEnabled?: boolean;
+    /** Cron expression for health checks (default: "0 6 * * *" - 06:00 daily). */
+    healthCheckCron?: string;
+  };
+};
+
+export type FactsMemoryRoleConfig = {
+  /** Memory types this role can access. */
+  allowedTypes?: ("fact" | "preference" | "decision" | "event" | "todo")[];
+  /** Whether this role can see superseded entries. */
+  canSeeSuperseded?: boolean;
+  /** Whether this role can export data. */
+  canExport?: boolean;
+  /** Whether this role can see unredacted data. */
+  canSeeUnredacted?: boolean;
+};
+
+export type WorkflowsConfig = {
+  /** Whether workflows module is enabled. */
+  enabled?: boolean;
+  /** Custom storage path for workflow data. */
+  storagePath?: string;
+  /** Policy settings for workflow security. */
+  policy?: {
+    /** Timeout in milliseconds for approval prompts (default: 60000). */
+    approvalTimeoutMs?: number;
+  };
+  /** Intent routing settings for natural language workflow invocation. */
+  routing?: {
+    /** Whether intent routing is enabled. Default: false. */
+    enabled?: boolean;
+    /** Minimum confidence score (0-1) for intent detection. Default: 0.7. */
+    minConfidence?: number;
+    /** Auto-start workflow without confirmation. Default: false. */
+    autoStart?: boolean;
+  };
+  /** Retention settings for workflow cleanup. */
+  retention?: {
+    /** Maximum number of completed workflows to keep. */
+    maxCompleted?: number;
+    /** Maximum disk space per workflow in MB. */
+    maxDiskPerWorkflowMb?: number;
+    /** Maximum total disk space for all workflows in GB. */
+    maxTotalDiskGb?: number;
+    /** Days to keep logs for completed workflows. */
+    logRetentionDays?: number;
+    /** Days to keep logs for failed workflows. */
+    failedLogRetentionDays?: number;
+    /** Days to keep artifacts. */
+    artifactRetentionDays?: number;
+    /** Log rotation settings. Set to null to disable rotation. */
+    logRotation?: {
+      /** Maximum log file size in bytes before rotation. */
+      maxSizeBytes?: number;
+      /** Maximum number of rotated files to keep. */
+      maxRotatedFiles?: number;
+    } | null;
+    /** Enable automatic cleanup on startup and at intervals. */
+    autoCleanup?: boolean;
+    /** Interval in minutes between auto-cleanup runs (default: 60). */
+    cleanupIntervalMinutes?: number;
+  };
 };
 
 export type ConfigValidationIssue = {

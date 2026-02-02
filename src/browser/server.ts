@@ -26,6 +26,23 @@ export async function startBrowserControlServerFromConfig(): Promise<BrowserServ
   const app = express();
   app.use(express.json({ limit: "1mb" }));
 
+  // SECURITY: Apply Bearer token auth if configured.
+  // Even for loopback, auth protects against CSRF-style attacks from local processes.
+  const authToken = resolved.authToken;
+  if (authToken) {
+    app.use((req, res, next) => {
+      const auth = String(req.headers.authorization ?? "").trim();
+      if (auth === `Bearer ${authToken}`) return next();
+      res.status(401).json({ error: "Unauthorized: missing or invalid Bearer token" });
+    });
+    logServer.info("Browser control server auth enabled");
+  } else {
+    logServer.warn(
+      "Browser control server running WITHOUT auth. " +
+        "Set browser.authToken in config for added security.",
+    );
+  }
+
   const ctx = createBrowserRouteContext({
     getState: () => state,
   });

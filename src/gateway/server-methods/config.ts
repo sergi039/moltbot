@@ -185,7 +185,7 @@ export const configHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    await writeConfigFile(validated.config);
+    await writeConfigFile(validated.config, { source: "gateway:config.set" });
     respond(
       true,
       {
@@ -263,7 +263,7 @@ export const configHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    await writeConfigFile(validated.config);
+    await writeConfigFile(validated.config, { source: "gateway:config.patch" });
 
     const sessionKey =
       typeof (params as { sessionKey?: unknown }).sessionKey === "string"
@@ -360,7 +360,7 @@ export const configHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    await writeConfigFile(validated.config);
+    await writeConfigFile(validated.config, { source: "gateway:config.apply" });
 
     const sessionKey =
       typeof (params as { sessionKey?: unknown }).sessionKey === "string"

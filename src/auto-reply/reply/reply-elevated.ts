@@ -5,7 +5,11 @@ import { getChannelDock } from "../../channels/dock.js";
 import { normalizeChannelId } from "../../channels/plugins/index.js";
 import { CHAT_CHANNEL_ORDER } from "../../channels/registry.js";
 import { formatCliCommand } from "../../cli/command-format.js";
+import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { INTERNAL_MESSAGE_CHANNEL } from "../../utils/message-channel.js";
+
+const logger = createSubsystemLogger("elevated");
+let wildcardWarningShown = false;
 
 function normalizeAllowToken(value?: string) {
   if (!value) {
@@ -76,8 +80,18 @@ function isApprovedElevatedSender(params: {
   if (allowTokens.length === 0) {
     return false;
   }
+
+  // Block wildcard in elevated allowFrom - this is a security risk
   if (allowTokens.some((entry) => entry === "*")) {
-    return true;
+    if (!wildcardWarningShown) {
+      wildcardWarningShown = true;
+      logger.warn(
+        `tools.elevated.allowFrom.${params.provider} contains "*" wildcard. ` +
+          "Wildcards are not permitted in elevated allowlists for security reasons. " +
+          "Use explicit user identifiers instead. Request denied.",
+      );
+    }
+    return false;
   }
 
   const tokens = new Set<string>();

@@ -1,6 +1,8 @@
 import type { GatewayBrowserClient } from "../gateway";
 import type { SkillStatusReport } from "../types";
 
+export type SkillStatusFilter = "all" | "active" | "inactive";
+
 export type SkillsState = {
   client: GatewayBrowserClient | null;
   connected: boolean;
@@ -10,6 +12,7 @@ export type SkillsState = {
   skillsBusyKey: string | null;
   skillEdits: Record<string, string>;
   skillMessages: SkillMessageMap;
+  skillStatusFilter: SkillStatusFilter;
 };
 
 export type SkillMessage = {
@@ -120,6 +123,10 @@ export async function saveSkillApiKey(state: SkillsState, skillKey: string) {
   } finally {
     state.skillsBusyKey = null;
   }
+}
+
+export function updateSkillStatusFilter(state: SkillsState, filter: SkillStatusFilter) {
+  state.skillStatusFilter = filter;
 }
 
 export async function installSkill(

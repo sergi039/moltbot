@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "recommendations": [
+    {
+      "id": "rec-1",
+      "priority": "must",
+      "description": "Commit and push the smoke-test console.log changes (and any supporting scripts/docs) before requesting another review.",
+      "rationale": "The current diff is empty, so reviewers cannot validate the task." 
+    },
+    {
+      "id": "rec-2",
+      "priority": "should",
+      "description": "Add evidence of the smoke test (logs, CLI output, or automated script coverage) once the change exists.",
+      "rationale": "Demonstrating the console.log behavior will make the review meaningful and verifiable."
+    }
+  ]
+}

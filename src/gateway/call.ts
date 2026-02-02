@@ -181,10 +181,17 @@ export async function callGateway<T = Record<string, unknown>>(
 
   const formatCloseError = (code: number, reason: string) => {
     const reasonText = reason?.trim() || "no close reason";
-    const hint =
-      code === 1006 ? "abnormal closure (no close frame)" : code === 1000 ? "normal closure" : "";
-    const suffix = hint ? ` ${hint}` : "";
-    return `gateway closed (${code}${suffix}): ${reasonText}\n${connectionDetails.message}`;
+    let hint = "";
+    if (code === 1006) {
+      hint = "abnormal closure (no close frame)";
+    } else if (code === 1000) {
+      hint = "normal closure";
+    } else if (code === 1008 && reasonText.toLowerCase().includes("unauthorized")) {
+      // Auth failure - provide helpful hint
+      hint = "check --token or gateway.auth.token in config";
+    }
+    const suffix = hint ? ` (${hint})` : "";
+    return `gateway closed (${code}): ${reasonText}${suffix}\n${connectionDetails.message}`;
   };
   const formatTimeoutError = () =>
     `gateway timeout after ${timeoutMs}ms\n${connectionDetails.message}`;

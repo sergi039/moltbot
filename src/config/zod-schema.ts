@@ -528,6 +528,148 @@ export const OpenClawSchema = z
       })
       .strict()
       .optional(),
+    factsMemory: z
+      .object({
+        enabled: z.boolean().optional(),
+        dbPath: z.string().optional(),
+        markdownPath: z.string().optional(),
+        batchSize: z.number().int().positive().optional(),
+        extraction: z
+          .object({
+            enabled: z.boolean().optional(),
+            provider: z.string().optional(),
+            model: z.string().optional(),
+          })
+          .strict()
+          .optional(),
+        scheduler: z
+          .object({
+            dailyEnabled: z.boolean().optional(),
+            dailyCron: z.string().optional(),
+            weeklyEnabled: z.boolean().optional(),
+            weeklyCron: z.string().optional(),
+            timezone: z.string().optional(),
+          })
+          .strict()
+          .optional(),
+        embeddings: z
+          .object({
+            enabled: z.boolean().optional(),
+            provider: z.string().optional(),
+            model: z.string().optional(),
+            fallbackEnabled: z.boolean().optional(),
+          })
+          .strict()
+          .optional(),
+        retention: z
+          .object({
+            maxAgeDays: z.number().int().positive().optional(),
+            maxSizeMb: z.number().positive().optional(),
+            pruneLowImportance: z.boolean().optional(),
+            minImportance: z.number().min(0).max(1).optional(),
+            truncateSummariesDays: z.number().int().positive().optional(),
+          })
+          .strict()
+          .optional(),
+        limits: z
+          .object({
+            maxMessages: z.number().int().positive().optional(),
+            maxFacts: z.number().int().positive().optional(),
+            maxTokens: z.number().int().positive().optional(),
+            cooldownMs: z.number().int().nonnegative().optional(),
+          })
+          .strict()
+          .optional(),
+        redaction: z
+          .object({
+            enabled: z.boolean().optional(),
+            patterns: z
+              .array(
+                z.enum([
+                  "EMAIL",
+                  "PHONE",
+                  "API_KEY",
+                  "JWT",
+                  "BEARER",
+                  "URL_CREDS",
+                  "IP_ADDRESS",
+                  "CREDIT_CARD",
+                  "SSN",
+                ]),
+              )
+              .optional(),
+          })
+          .strict()
+          .optional(),
+        access: z
+          .object({
+            enabled: z.boolean().optional(),
+            defaultRole: z.enum(["admin", "operator", "analyst", "guest"]).optional(),
+            roles: z
+              .object({
+                admin: z
+                  .object({
+                    allowedTypes: z
+                      .array(z.enum(["fact", "preference", "decision", "event", "todo"]))
+                      .optional(),
+                    canSeeSuperseded: z.boolean().optional(),
+                    canExport: z.boolean().optional(),
+                    canSeeUnredacted: z.boolean().optional(),
+                  })
+                  .strict()
+                  .optional(),
+                operator: z
+                  .object({
+                    allowedTypes: z
+                      .array(z.enum(["fact", "preference", "decision", "event", "todo"]))
+                      .optional(),
+                    canSeeSuperseded: z.boolean().optional(),
+                    canExport: z.boolean().optional(),
+                    canSeeUnredacted: z.boolean().optional(),
+                  })
+                  .strict()
+                  .optional(),
+                analyst: z
+                  .object({
+                    allowedTypes: z
+                      .array(z.enum(["fact", "preference", "decision", "event", "todo"]))
+                      .optional(),
+                    canSeeSuperseded: z.boolean().optional(),
+                    canExport: z.boolean().optional(),
+                    canSeeUnredacted: z.boolean().optional(),
+                  })
+                  .strict()
+                  .optional(),
+                guest: z
+                  .object({
+                    allowedTypes: z
+                      .array(z.enum(["fact", "preference", "decision", "event", "todo"]))
+                      .optional(),
+                    canSeeSuperseded: z.boolean().optional(),
+                    canExport: z.boolean().optional(),
+                    canSeeUnredacted: z.boolean().optional(),
+                  })
+                  .strict()
+                  .optional(),
+              })
+              .strict()
+              .optional(),
+          })
+          .strict()
+          .optional(),
+        alerts: z
+          .object({
+            maxDbSizeMb: z.number().positive().optional(),
+            maxErrorsPerDay: z.number().int().nonnegative().optional(),
+            maxStaleDays: z.number().int().positive().optional(),
+            healthCheckEnabled: z.boolean().optional(),
+            healthCheckCron: z.string().optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((cfg, ctx) => {
