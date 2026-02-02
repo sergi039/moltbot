@@ -26,6 +26,7 @@ export type InlineActionResult =
       abortedLastRun: boolean;
     };
 
+// oxlint-disable-next-line typescript/no-explicit-any
 function extractTextFromToolResult(result: any): string | null {
   if (!result || typeof result !== "object") {
     return null;
@@ -230,6 +231,7 @@ export async function handleInlineActions(params: {
           command: rawArgs,
           commandName: skillInvocation.command.name,
           skillName: skillInvocation.command.skillName,
+          // oxlint-disable-next-line typescript/no-explicit-any
         } as any);
         const text = extractTextFromToolResult(result) ?? "✅ Done.";
         typing.cleanup();
