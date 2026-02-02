@@ -564,7 +564,8 @@ export function listSessionsFromStore(params: {
   const { cfg, storePath, store, opts } = params;
   const now = Date.now();
 
-  const includeGlobal = opts.includeGlobal === true;
+  // Auto-include global session when session.scope=global is configured
+  const includeGlobal = opts.includeGlobal === true || cfg.session?.scope === "global";
   const includeUnknown = opts.includeUnknown === true;
   const includeDerivedTitles = opts.includeDerivedTitles === true;
   const includeLastMessage = opts.includeLastMessage === true;
