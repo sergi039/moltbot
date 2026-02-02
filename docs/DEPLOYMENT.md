@@ -143,6 +143,21 @@ The LaunchAgent uses `gateway-preflight.sh` which:
 
 ---
 
+## 7) macOS Companion App Updates
+
+The macOS companion app (DMG/ZIP) is a **client** and updates **independently** of the Gateway.
+
+Rules:
+- Updating the macOS app does **not** update or overwrite the Gateway code.
+- Custom features live in the Gateway (release branch), not the client.
+- If the app gains new UI features, the Gateway may need to be updated to support them.
+
+Operational guidance:
+- Update Gateway via the release pipeline (main → release → prod).
+- Update the macOS app via the official releases channel.
+
+---
+
 ## 8) Required Documentation Links
 
 This document must be linked from:

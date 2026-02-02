@@ -457,6 +457,21 @@ launchctl load ~/Library/LaunchAgents/com.moltbot.backup.dev.plist
 
 ---
 
+## macOS Companion App Updates
+
+The macOS app is a **client**. It updates independently from the Gateway.
+
+Key points:
+- Updating the macOS app does **not** update or overwrite the Gateway.
+- Our custom features live in the Gateway (release branch).
+- New app features may require a newer Gateway.
+
+Operational rule:
+- Update Gateway via the release pipeline.
+- Update the macOS app via official releases.
+
+---
+
 ### Verification Report (2026-02-01)
 
 **Goal:** Validate full backup/restore coverage including sessions history.
