@@ -82,16 +82,25 @@ export interface FactsMemoryState {
 // ============================================================================
 
 function resolveHttpBaseUrl(wsUrl: string): string {
-  // Convert WebSocket URL to HTTP URL
-  // ws://host:port -> http://host:port
-  // wss://host:port -> https://host:port
-  if (wsUrl.startsWith("wss://")) {
-    return wsUrl.replace("wss://", "https://");
+  const raw = wsUrl.trim();
+  if (!raw && typeof window !== "undefined") {
+    return window.location.origin;
   }
-  if (wsUrl.startsWith("ws://")) {
-    return wsUrl.replace("ws://", "http://");
+  try {
+    const url = new URL(raw);
+    const protocol =
+      url.protocol === "wss:" ? "https:" : url.protocol === "ws:" ? "http:" : url.protocol;
+    return `${protocol}//${url.host}`;
+  } catch {
+    // Fallback: simple scheme replacement if URL parsing fails.
+    if (raw.startsWith("wss://")) {
+      return raw.replace("wss://", "https://");
+    }
+    if (raw.startsWith("ws://")) {
+      return raw.replace("ws://", "http://");
+    }
+    return raw;
   }
-  return wsUrl;
 }
 
 function buildHeaders(token: string | null): HeadersInit {
@@ -133,6 +142,13 @@ async function fetchJson<T>(url: string, token: string | null): Promise<T> {
       );
     }
     throw new Error(`HTTP ${response.status}: ${text}`);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("text/html")) {
+    throw new Error(
+      "Expected JSON but received HTML. Check gateway URL and auth token.",
+    );
   }
 
   return response.json() as Promise<T>;
