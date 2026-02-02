@@ -23,6 +23,58 @@ This runbook covers day-to-day operations, monitoring, incident response, and ma
 
 ---
 
+## Critical Config Keys (Must Persist)
+
+These configuration keys are **protected by guardrails** and must never be lost during config writes. If a config update would remove these keys, the guardrail automatically preserves them.
+
+| Key | Purpose | Required For |
+|-----|---------|--------------|
+| `gateway.mode` | Gateway operation mode | Gateway startup (must be `"local"`) |
+| `gateway.auth.token` | Authentication token | Gateway web UI access |
+| `channels.telegram.enabled` | Telegram channel toggle | Telegram bot operation |
+| `env.TELEGRAM_BOT_TOKEN` | Telegram bot API token | Telegram bot authentication |
+
+### Verification
+
+Run the recovery test suite to verify these keys are present:
+
+```bash
+pnpm vitest run --config test/recovery/vitest.config.ts
+```
+
+Or check manually:
+
+```bash
+# Check gateway mode
+pnpm openclaw config get gateway.mode
+
+# Check gateway token exists
+pnpm openclaw config get gateway.auth.token
+
+# Check Telegram token
+pnpm openclaw config get env.TELEGRAM_BOT_TOKEN
+```
+
+### Recovery
+
+If any of these keys are missing, restore from backup or set manually:
+
+```bash
+# Set gateway mode
+pnpm openclaw config set gateway.mode local
+
+# Generate and set gateway token
+pnpm openclaw config set gateway.auth.token "$(openssl rand -hex 16)"
+
+# Set Telegram token (from backup file if available)
+pnpm openclaw config set env.TELEGRAM_BOT_TOKEN "$(cat ~/.openclaw/telegram/bot-token.txt)"
+
+# Enable Telegram channel
+pnpm openclaw config set channels.telegram.enabled true
+```
+
+---
+
 ## System Overview
 
 ### Architecture

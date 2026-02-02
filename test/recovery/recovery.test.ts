@@ -315,6 +315,75 @@ describe("P1 — Integration tests", () => {
   });
 });
 
+describe("P1 — Critical config keys", () => {
+  describe("8) Gateway startup requirements", () => {
+    it("gateway.mode is set to 'local'", () => {
+      if (!fileExists(PROD_STATE_DIR)) {
+        console.warn("Skipping: prod state dir does not exist");
+        return;
+      }
+
+      const configPath = join(PROD_STATE_DIR, "openclaw.json");
+      if (!fileExists(configPath)) {
+        console.warn("Skipping: no config file");
+        return;
+      }
+
+      const config = readJson(configPath) as { gateway?: { mode?: string } };
+      expect(config.gateway?.mode).toBe("local");
+    });
+
+    it("gateway.auth.token exists and is not empty", () => {
+      if (!fileExists(PROD_STATE_DIR)) {
+        console.warn("Skipping: prod state dir does not exist");
+        return;
+      }
+
+      const configPath = join(PROD_STATE_DIR, "openclaw.json");
+      if (!fileExists(configPath)) {
+        console.warn("Skipping: no config file");
+        return;
+      }
+
+      const config = readJson(configPath) as { gateway?: { auth?: { token?: string } } };
+      const token = config.gateway?.auth?.token;
+      expect(token).toBeDefined();
+      expect(typeof token).toBe("string");
+      expect(token!.length).toBeGreaterThan(0);
+    });
+
+    it("env.TELEGRAM_BOT_TOKEN exists", () => {
+      if (!fileExists(PROD_STATE_DIR)) {
+        console.warn("Skipping: prod state dir does not exist");
+        return;
+      }
+
+      const configPath = join(PROD_STATE_DIR, "openclaw.json");
+      const tokenFilePath = join(PROD_STATE_DIR, "telegram", "bot-token.txt");
+
+      let hasToken = false;
+
+      // Check config env
+      if (fileExists(configPath)) {
+        const config = readJson(configPath) as { env?: { TELEGRAM_BOT_TOKEN?: string } };
+        if (config.env?.TELEGRAM_BOT_TOKEN && config.env.TELEGRAM_BOT_TOKEN.length > 0) {
+          hasToken = true;
+        }
+      }
+
+      // Fallback: check token file
+      if (!hasToken && fileExists(tokenFilePath)) {
+        const token = readFileSync(tokenFilePath, "utf-8").trim();
+        if (token.length > 0) {
+          hasToken = true;
+        }
+      }
+
+      expect(hasToken).toBe(true);
+    });
+  });
+});
+
 describe("P2 — Smoke tests", () => {
   describe("6) Verify-env", () => {
     it("state dir exists and is valid", () => {
