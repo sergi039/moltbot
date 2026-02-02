@@ -10,6 +10,8 @@ title: "CLI Reference"
 
 This page describes the current CLI behavior. If commands change, update this doc.
 
+> **Contributing or forking?** See [Branching Model](/BRANCHING) and [Deployment Guide](/DEPLOYMENT) for branch rules and deployment flows.
+
 ## Command pages
 
 - [`setup`](/cli/setup)
