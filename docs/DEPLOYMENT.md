@@ -342,6 +342,11 @@ Notes:
   Concerns: None blocking.
 
   Recommendation: Proceed with release after Architect #1 approval.
+
+  Addendum (2026-02-02):
+  - Docs updated for macOS app update rules.
+  - RUNBOOK includes upstream update checklist + macOS app notes.
+  - Commit: c3cc2de5e (release/memory-v1).
 ```
 
 ### Architect #1 sign‑off
