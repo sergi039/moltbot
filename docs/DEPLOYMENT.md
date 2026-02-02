@@ -22,11 +22,32 @@ This document is the source of truth for how to run OpenClaw in development and 
 
 ## 2) Gateway Start Commands
 
-### Production
+### Production (REQUIRED: use release branch)
 
+**Gateway MUST run from `release/memory-v1` branch.** Running from `main` will cause Memory/Skills UI to be missing.
+
+The recommended way to start the gateway:
+
+```bash
+./scripts/start-gateway-release.sh
 ```
+
+This script:
+1. Switches to `release/memory-v1`
+2. Rebuilds UI and dist
+3. Restarts the gateway via LaunchAgent
+
+Manual start (if you're already on the correct branch):
+
+```bash
+git checkout release/memory-v1
+pnpm ui:build && pnpm build
 OPENCLAW_STATE_DIR=~/.openclaw openclaw gateway run
 ```
+
+**Guardrails:** The `gateway-preflight.sh` script will block gateway startup if:
+- Branch is not `release/memory-v1`
+- Build SHA doesn't match git HEAD (stale build)
 
 ### Development
 

@@ -67,6 +67,66 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ============================================================================
+# Branch Validation (P0)
+# ============================================================================
+
+REQUIRED_BRANCH="release/memory-v1"
+CURRENT_BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")"
+
+if [[ "$CURRENT_BRANCH" != "$REQUIRED_BRANCH" ]]; then
+  echo ""
+  error "Gateway cannot start - wrong branch!"
+  echo ""
+  echo -e "  Current:  ${RED}$CURRENT_BRANCH${NC}"
+  echo -e "  Required: ${GREEN}$REQUIRED_BRANCH${NC}"
+  echo ""
+  echo "Fix:"
+  echo "  cd $REPO_ROOT"
+  echo "  git checkout $REQUIRED_BRANCH"
+  echo "  pnpm ui:build && pnpm build"
+  echo ""
+  echo "Or use the release launcher:"
+  echo "  ./scripts/start-gateway-release.sh"
+  echo ""
+  exit 1
+fi
+
+ok "Branch: $CURRENT_BRANCH"
+
+# ============================================================================
+# Build SHA Validation (P0)
+# ============================================================================
+
+BUILD_INFO_FILE="$REPO_ROOT/dist/build-info.json"
+GIT_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
+
+if [[ -f "$BUILD_INFO_FILE" ]]; then
+  BUILD_SHA="$(grep -o '"commit"[[:space:]]*:[[:space:]]*"[^"]*"' "$BUILD_INFO_FILE" | sed 's/.*"commit"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')"
+
+  if [[ -n "$BUILD_SHA" && -n "$GIT_HEAD" && "$BUILD_SHA" != "$GIT_HEAD" ]]; then
+    echo ""
+    error "Gateway cannot start - build SHA mismatch!"
+    echo ""
+    echo -e "  Build SHA: ${RED}${BUILD_SHA:0:12}${NC}"
+    echo -e "  Git HEAD:  ${GREEN}${GIT_HEAD:0:12}${NC}"
+    echo ""
+    echo "The UI/dist was built from a different commit than current HEAD."
+    echo "Memory/Skills UI may be missing or outdated."
+    echo ""
+    echo "Fix:"
+    echo "  cd $REPO_ROOT"
+    echo "  pnpm ui:build && pnpm build"
+    echo "  launchctl kickstart -k gui/\$UID/com.moltbot.gateway.prod"
+    echo ""
+    exit 1
+  fi
+
+  ok "Build SHA: ${BUILD_SHA:0:12} (matches HEAD)"
+else
+  warn "No build-info.json found - skipping SHA check"
+fi
+
+# ============================================================================
 # Config Validation
 # ============================================================================
 

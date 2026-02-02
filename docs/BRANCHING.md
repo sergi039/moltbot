@@ -65,21 +65,30 @@ git checkout main
 git merge feature/new-thing  # ❌ NEVER DO THIS
 ```
 
-### 3. Production runs from `release/*`
+### 3. Production runs from `release/*` (ENFORCED)
 
 - Gateway/bot always runs from a release branch
 - Never run production from `main`
+- **This is enforced by `gateway-preflight.sh`** - gateway will refuse to start from wrong branch
 
 ```bash
-# Correct
+# Correct: use the release launcher
+./scripts/start-gateway-release.sh
+
+# Or manually:
 git checkout release/memory-v1
-pnpm build && pnpm ui:build
+pnpm ui:build && pnpm build
 # start gateway
 
-# WRONG
+# WRONG - gateway-preflight.sh will BLOCK this:
 git checkout main
-# start gateway  # ❌ Will lose custom features
+# start gateway  # ❌ EXIT 1: wrong branch
 ```
+
+**Why this matters:**
+- `main` branch mirrors upstream and lacks custom features (Memory, Skills UI)
+- Running from `main` will show incomplete UI
+- The preflight script also validates build SHA matches git HEAD
 
 ### 4. Upstream updates flow downstream
 
@@ -120,10 +129,12 @@ pnpm install && pnpm build && pnpm ui:build
 
 **Active release branch:** `release/memory-v1`
 
+**Gateway is ENFORCED to run only from this branch.** See `scripts/gateway-preflight.sh`.
+
 Contains:
 - Facts Memory System (Phases 1-8)
 - All upstream features up to sync point
-- Custom UI enhancements
+- Custom UI enhancements (Memory, Skills panels)
 
 ## Recovery
 
