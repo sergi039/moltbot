@@ -5,9 +5,8 @@
  * Manages workflow lifecycle, phase transitions, and agent coordination.
  */
 
-import { mkdirSync } from "node:fs";
 import { EventEmitter } from "node:events";
-
+import { mkdirSync } from "node:fs";
 import type {
   WorkflowDefinition,
   WorkflowInput,
@@ -18,9 +17,9 @@ import type {
   PhaseExecution,
   WorkspaceConfig,
 } from "./types.js";
-
+import { loadArtifactJson, generateManifest } from "./artifacts/store.js";
+import { validatePhaseOutput, evaluateCondition } from "./artifacts/validator.js";
 import { generateWorkflowId, PERSISTENCE_EVENTS } from "./constants.js";
-
 import {
   saveWorkflowState,
   loadWorkflowState,
@@ -29,9 +28,6 @@ import {
   getWorkflowDir,
   listRunningWorkflows,
 } from "./state/persistence.js";
-
-import { validatePhaseOutput, evaluateCondition } from "./artifacts/validator.js";
-import { loadArtifactJson, generateManifest } from "./artifacts/store.js";
 
 // ============================================================================
 // Orchestrator Class
@@ -251,6 +247,10 @@ export class WorkflowOrchestrator extends EventEmitter {
 
   private async executePhases(run: WorkflowRun, definition: WorkflowDefinition): Promise<void> {
     let currentPhaseIndex = 0;
+    let agentRunCount = 0;
+
+    // Check if running in live mode (real agent execution)
+    const isLive = (run.input.context as Record<string, unknown> | undefined)?.live === true;
 
     // Resume from last phase if restarting
     if (run.currentPhase) {
@@ -264,6 +264,25 @@ export class WorkflowOrchestrator extends EventEmitter {
         return;
       }
 
+      // Check maxDurationMs limit
+      if (run.startedAt && definition.settings.maxDurationMs) {
+        const elapsed = Date.now() - run.startedAt;
+        if (elapsed > definition.settings.maxDurationMs) {
+          throw new Error(
+            `Workflow timeout: exceeded maxDurationMs (${definition.settings.maxDurationMs}ms)`,
+          );
+        }
+      }
+
+      // Check maxAgentRuns limit (only in live mode)
+      if (isLive && definition.settings.maxAgentRuns !== undefined) {
+        if (agentRunCount >= definition.settings.maxAgentRuns) {
+          throw new Error(
+            `Agent run limit exceeded: ${agentRunCount} >= ${definition.settings.maxAgentRuns}`,
+          );
+        }
+      }
+
       const phase = definition.phases[currentPhaseIndex];
       run.currentPhase = phase.id;
 
@@ -273,6 +292,11 @@ export class WorkflowOrchestrator extends EventEmitter {
         throw new Error(
           `Maximum iterations (${definition.settings.maxReviewIterations}) exceeded for phase: ${phase.id}`,
         );
+      }
+
+      // Increment agent run count in live mode (before execution)
+      if (isLive) {
+        agentRunCount++;
       }
 
       // Execute phase

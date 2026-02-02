@@ -44,11 +44,13 @@ else
 fi
 
 SKILLS_SRC="$REPO_ROOT/skills"
+SKILLS_LOCAL="$REPO_ROOT/skills-local"
 SKILLS_DST="$RUNTIME_DIR/skills"
 
 echo "=== Sync Skills ==="
 echo "Profile: $PROFILE"
 echo "Source:  $SKILLS_SRC"
+echo "Local:   $SKILLS_LOCAL (overlay if present)"
 echo "Target:  $SKILLS_DST"
 echo ""
 
@@ -75,6 +77,21 @@ for skill_dir in "$SKILLS_SRC"/*/; do
     rsync -av --delete "$skill_dir" "$SKILLS_DST/$skill_name/"
   fi
 done
+
+# Overlay local skills if present
+if [[ -d "$SKILLS_LOCAL" ]]; then
+  echo ""
+  echo "=== Overlay Local Skills ==="
+  for skill_dir in "$SKILLS_LOCAL"/*/; do
+    if [[ -d "$skill_dir" ]]; then
+      skill_name=$(basename "$skill_dir")
+      echo "Overlaying skill: $skill_name"
+
+      mkdir -p "$SKILLS_DST/$skill_name"
+      rsync -av --delete "$skill_dir" "$SKILLS_DST/$skill_name/"
+    fi
+  done
+fi
 
 echo ""
 echo "=== Sync Complete ==="

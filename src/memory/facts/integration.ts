@@ -7,23 +7,22 @@
 
 import type { Api, AssistantMessage, Context, Model } from "@mariozechner/pi-ai";
 import { complete } from "@mariozechner/pi-ai";
-import { discoverAuthStorage, discoverModels } from "@mariozechner/pi-coding-agent";
-
 import type { OpenClawConfig } from "../../config/config.js";
 import type { FactsMemoryConfig } from "../../config/types.openclaw.js";
-import { createSubsystemLogger } from "../../logging/subsystem.js";
+import type { LlmCallFn } from "./extractor.js";
+import type { RetrievalTrace } from "./types.js";
+import { resolveOpenClawAgentDir } from "../../agents/agent-paths.js";
 import { getApiKeyForModel, requireApiKey } from "../../agents/model-auth.js";
 import { ensureOpenClawModelsJson } from "../../agents/models-config.js";
-import { resolveOpenClawAgentDir } from "../../agents/agent-paths.js";
+import { discoverAuthStorage, discoverModels } from "../../agents/pi-model-discovery.js";
+import { createSubsystemLogger } from "../../logging/subsystem.js";
+import { runConsolidation, type ConsolidationResult } from "./consolidation.js";
 import {
   createFactsMemoryManager,
   type FactsMemoryManager,
   resetFactsMemoryManager,
 } from "./manager.js";
-import type { LlmCallFn } from "./extractor.js";
-import { runConsolidation, type ConsolidationResult } from "./consolidation.js";
 import { getRelevantContext, getRelevantContextWithTrace } from "./retrieval.js";
-import type { RetrievalTrace } from "./types.js";
 
 // ============================================================================
 // Singleton Manager

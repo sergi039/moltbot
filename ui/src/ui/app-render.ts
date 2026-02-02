@@ -1,6 +1,28 @@
 import { html, nothing } from "lit";
 
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway";
+
+/**
+ * Get build SHA from index.html meta tag or data attribute.
+ * Returns short SHA (8 chars) for display.
+ */
+function getBuildSha(): string {
+  // Try meta tag first
+  const meta = document.querySelector('meta[name="build-sha"]');
+  if (meta) {
+    const sha = meta.getAttribute("content");
+    if (sha && sha !== "unknown") {
+      return sha.slice(0, 8);
+    }
+  }
+  // Fallback to html data attribute
+  const html = document.documentElement;
+  const sha = html.getAttribute("data-build-sha");
+  if (sha && sha !== "unknown") {
+    return sha.slice(0, 8);
+  }
+  return "dev";
+}
 import type { AppViewState } from "./app-view-state";
 import { parseAgentSessionKey } from "../../../src/routing/session-key.js";
 import {
@@ -145,7 +167,7 @@ export function renderApp(state: AppViewState) {
           <div class="brand">
             <div class="brand-logo">
               <img
-                src={`${normalizeBasePath(state.basePath) || ""}/favicon.svg`}
+                src="${normalizeBasePath(state.basePath) || ""}/favicon.svg"
                 alt="OpenClaw"
               />
             </div>
@@ -207,6 +229,10 @@ export function renderApp(state: AppViewState) {
               <span class="nav-item__text">Docs</span>
             </a>
           </div>
+        </div>
+        <div class="nav-build-info">
+          <span class="nav-build-info__label">Build:</span>
+          <code class="nav-build-info__sha" title="Click to copy SHA">${getBuildSha()}</code>
         </div>
       </aside>
       <main class="content ${isChat ? "content--chat" : ""}">

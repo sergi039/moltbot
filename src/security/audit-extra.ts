@@ -1062,3 +1062,102 @@ export async function readConfigSnapshotForAudit(params: {
     configPath: params.configPath,
   }).readConfigFileSnapshot();
 }
+
+const BACKUP_STALE_HOURS = 48;
+
+export async function collectBackupStalenessFindings(params: {
+  env: NodeJS.ProcessEnv;
+  profile?: string;
+}): Promise<SecurityAuditFinding[]> {
+  const findings: SecurityAuditFinding[] = [];
+  const home = params.env.HOME ?? "";
+  if (!home) {
+    return findings;
+  }
+
+  const profile = params.profile ?? "default";
+  const backupDir = path.join(home, "Backups", "openclaw", profile);
+
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = await fs.readdir(backupDir, { withFileTypes: true });
+  } catch {
+    findings.push({
+      checkId: "ops.backup.missing",
+      severity: "warn",
+      title: "No backup directory found",
+      detail: `Expected backup directory at ${backupDir}. Automated backups may not be configured.`,
+      remediation:
+        "Run scripts/backup-openclaw.sh or set up the backup LaunchAgent (com.moltbot.backup.dev.plist).",
+    });
+    return findings;
+  }
+
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  const backupDates = entries
+    .filter((e) => e.isDirectory() && datePattern.test(e.name))
+    .map((e) => e.name)
+    .sort()
+    .reverse();
+
+  if (backupDates.length === 0) {
+    findings.push({
+      checkId: "ops.backup.empty",
+      severity: "warn",
+      title: "Backup directory is empty",
+      detail: `No date-based backups found in ${backupDir}.`,
+      remediation: "Run scripts/backup-openclaw.sh to create a backup.",
+    });
+    return findings;
+  }
+
+  const latestBackupDate = backupDates[0];
+  const latestBackupPath = path.join(backupDir, latestBackupDate);
+
+  const versionFile = path.join(latestBackupPath, "VERSION");
+  let backupTimestamp: Date | null = null;
+
+  try {
+    const versionContent = await fs.readFile(versionFile, "utf-8");
+    const timestampMatch = versionContent.match(/timestamp:\s*(\S+)/);
+    if (timestampMatch) {
+      backupTimestamp = new Date(timestampMatch[1]);
+    }
+  } catch {
+    backupTimestamp = new Date(`${latestBackupDate}T00:00:00Z`);
+  }
+
+  if (backupTimestamp) {
+    const ageMs = Date.now() - backupTimestamp.getTime();
+    const ageHours = ageMs / (1000 * 60 * 60);
+
+    if (ageHours > BACKUP_STALE_HOURS) {
+      const ageDays = Math.floor(ageHours / 24);
+      findings.push({
+        checkId: "ops.backup.stale",
+        severity: "warn",
+        title: "Backup is stale",
+        detail: `Latest backup is ${ageDays > 0 ? `${ageDays} day(s)` : `${Math.floor(ageHours)} hours`} old (threshold: ${BACKUP_STALE_HOURS}h). Backup date: ${latestBackupDate}.`,
+        remediation:
+          "Check that the backup LaunchAgent is loaded and running. Run: launchctl list | grep moltbot.backup",
+      });
+    }
+  }
+
+  const memoryDir = path.join(latestBackupPath, "memory");
+  const factsDbPath = path.join(memoryDir, "facts.db");
+  try {
+    await fs.access(factsDbPath);
+  } catch {
+    findings.push({
+      checkId: "ops.backup.facts_missing",
+      severity: "warn",
+      title: "Facts DB not in backup",
+      detail: `Latest backup (${latestBackupDate}) does not include memory/facts.db.`,
+      remediation:
+        "Update scripts/backup-openclaw.sh to include Facts DB backup, or run the updated backup script.",
+    });
+  }
+
+  return findings;
+}

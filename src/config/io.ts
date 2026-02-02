@@ -58,6 +58,83 @@ const SHELL_ENV_EXPECTED_KEYS = [
 const CONFIG_BACKUP_COUNT = 5;
 const loggedInvalidConfigs = new Set<string>();
 
+// Config guardrail: these critical keys must never be lost during config writes.
+// If a new config is missing these values but the existing config has them,
+// the existing values are preserved.
+const PROTECTED_CONFIG_PATHS = [
+  // Gateway core
+  ["gateway", "mode"],
+  ["gateway", "auth", "token"],
+  // Telegram channel
+  ["channels", "telegram", "enabled"],
+  // Environment variables (sensitive tokens)
+  ["env", "TELEGRAM_BOT_TOKEN"],
+] as const;
+
+type GatewayGuardResult = {
+  preserved: Array<{ path: string[]; value: unknown }>;
+  warnings: string[];
+};
+
+function getNestedValue(obj: unknown, path: readonly string[]): unknown {
+  let current = obj;
+  for (const key of path) {
+    if (current === null || current === undefined || typeof current !== "object") {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+function setNestedValue(
+  obj: Record<string, unknown>,
+  path: readonly string[],
+  value: unknown,
+): void {
+  let current = obj;
+  for (let i = 0; i < path.length - 1; i++) {
+    const key = path[i];
+    if (typeof current[key] !== "object" || current[key] === null) {
+      current[key] = {};
+    }
+    current = current[key] as Record<string, unknown>;
+  }
+  current[path[path.length - 1]] = value;
+}
+
+function applyConfigGuardrail(
+  newConfig: OpenClawConfig,
+  existingConfig: OpenClawConfig | null,
+  source: string,
+): GatewayGuardResult {
+  const preserved: Array<{ path: string[]; value: unknown }> = [];
+  const warnings: string[] = [];
+
+  if (!existingConfig) {
+    return { preserved, warnings };
+  }
+
+  for (const protectedPath of PROTECTED_CONFIG_PATHS) {
+    const existingValue = getNestedValue(existingConfig, protectedPath);
+    const newValue = getNestedValue(newConfig, protectedPath);
+
+    // If existing has a value but new doesn't, preserve it
+    if (existingValue !== undefined && existingValue !== null && existingValue !== "") {
+      if (newValue === undefined || newValue === null || newValue === "") {
+        const pathStr = protectedPath.join(".");
+        console.log(
+          `[config-guard] preserving ${pathStr} (source=${source}, would have been lost)`,
+        );
+        setNestedValue(newConfig as Record<string, unknown>, protectedPath, existingValue);
+        preserved.push({ path: [...protectedPath], value: existingValue });
+      }
+    }
+  }
+
+  return { preserved, warnings };
+}
+
 export type ParseConfigJson5Result = { ok: true; parsed: unknown } | { ok: false; error: string };
 
 function hashConfigRaw(raw: string | null): string {
@@ -477,8 +554,37 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
     }
   }
 
-  async function writeConfigFile(cfg: OpenClawConfig) {
+  async function writeConfigFile(cfg: OpenClawConfig, options?: { source?: string }) {
     clearConfigCache();
+    const source = options?.source ?? "unknown";
+
+    // P1: Audit - log config write
+    const changedKeys = Object.keys(cfg).filter((k) => k !== "meta");
+    console.log(
+      `[config-write] source=${source} pid=${process.pid} keys=[${changedKeys.join(",")}] path=${configPath}`,
+    );
+
+    // P0: Config guardrail - preserve critical fields that should never be lost
+    let existingConfig: OpenClawConfig | null = null;
+    try {
+      if (deps.fs.existsSync(configPath)) {
+        const raw = deps.fs.readFileSync(configPath, "utf-8");
+        const parsed = deps.json5.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          existingConfig = parsed as OpenClawConfig;
+        }
+      }
+    } catch {
+      // best-effort read of existing config
+    }
+
+    const guardResult = applyConfigGuardrail(cfg, existingConfig, source);
+    if (guardResult.preserved.length > 0) {
+      console.log(
+        `[config-guard] preserved ${guardResult.preserved.length} critical fields from being lost`,
+      );
+    }
+
     const validated = validateConfigObjectWithPlugins(cfg);
     if (!validated.ok) {
       const issue = validated.issues[0];
@@ -608,7 +714,10 @@ export async function readConfigFileSnapshot(): Promise<ConfigFileSnapshot> {
   return await createConfigIO().readConfigFileSnapshot();
 }
 
-export async function writeConfigFile(cfg: OpenClawConfig): Promise<void> {
+export async function writeConfigFile(
+  cfg: OpenClawConfig,
+  options?: { source?: string },
+): Promise<void> {
   clearConfigCache();
-  await createConfigIO().writeConfigFile(cfg);
+  await createConfigIO().writeConfigFile(cfg, options);
 }

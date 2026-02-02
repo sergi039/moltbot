@@ -182,6 +182,12 @@ export const buildTelegramMessageContext = async ({
       ? resolveThreadSessionKeys({ baseSessionKey, threadId: String(dmThreadId) })
       : null;
   const sessionKey = threadKeys?.sessionKey ?? baseSessionKey;
+
+  // P0 diagnostics: log telegram session routing
+  logVerbose(
+    `[telegram-session] channel=telegram chatId=${chatId} isGroup=${isGroup} sessionKey="${sessionKey}" agentId="${route.agentId}" matchedBy="${route.matchedBy}"`,
+  );
+
   const mentionRegexes = buildMentionRegexes(cfg, route.agentId);
   const effectiveDmAllow = normalizeAllowFromWithStore({ allowFrom, storeAllowFrom });
   const groupAllowOverride = firstDefined(topicConfig?.allowFrom, groupConfig?.allowFrom);

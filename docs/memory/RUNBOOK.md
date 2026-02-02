@@ -354,6 +354,56 @@ CLAWDBOT_HOME=/tmp/test-restore moltbot memory facts import --in ~/backup-facts.
 CLAWDBOT_HOME=/tmp/test-restore moltbot memory facts stats
 ```
 
+### Full System Backup (Recommended)
+
+The dedicated backup scripts provide complete data protection including sessions history:
+
+```bash
+# Full backup (config, cron, skills, memory, sessions, workflows)
+scripts/backup-openclaw.sh --profile default
+
+# Dry-run restore (verify what would be restored)
+scripts/restore-openclaw.sh --dry-run
+
+# Full restore
+scripts/restore-openclaw.sh --profile default
+```
+
+**Backup includes:**
+| Component | Path | Description |
+|-----------|------|-------------|
+| Config | `openclaw.json` | Main configuration |
+| Cron | `cron/` | Scheduled jobs |
+| Skills | `skills/` | Custom skills |
+| Telegram | `telegram/` | Bot tokens |
+| Memory DBs | `memory/facts.db`, `memory/main.sqlite` | Facts + vector embeddings |
+| Sessions | `agents/*/sessions/*.jsonl` | Full conversation history |
+| Workflows | `workflows/` | Dev cycle workflows |
+
+**Automated backup:**
+```bash
+# Install LaunchAgent for daily backups
+launchctl load ~/Library/LaunchAgents/com.moltbot.backup.dev.plist
+```
+
+### Verification Report (2026-02-01)
+
+**Goal:** Validate full backup/restore coverage including sessions history.
+
+**Commands executed:**
+```bash
+# Verify backup contains sessions
+ls ~/Backups/openclaw/default/2026-02-01/agents/dev/sessions/
+
+# Dry-run restore and confirm sessions are included
+scripts/restore-openclaw.sh --profile default --date 2026-02-01 --dry-run
+```
+
+**Results:**
+- Backup contains `agents/*/sessions/*.jsonl` and `sessions.json`
+- Dry-run restore reports: "Restoring agents (sessions history)"
+- Memory DBs present in backup (`memory/facts.db`, `memory/main.sqlite`)
+
 ---
 
 ## Troubleshooting
@@ -429,6 +479,31 @@ moltbot memory facts stats --json | jq '.totalFacts'
 - Run cleanup: `moltbot memory facts cleanup --force --vacuum`
 - Lower retention limits
 - Enable `pruneLowImportance`
+
+---
+
+## Workflow Live Mode Verification
+
+Use this checklist to validate Real Agent Integration (Phase 3b).
+
+1) **Stub mode (default)** — completes without API keys:
+```
+moltbot workflow start --type dev-cycle --task "add feature" --repo .
+```
+Expected artifacts:
+- `~/.clawdbot/workflows/<runId>/phases/01-planning/artifacts/plan.md`
+- `~/.clawdbot/workflows/<runId>/phases/01-planning/artifacts/tasks.json`
+
+2) **Live mode** — requires provider auth:
+```
+moltbot workflow start --type dev-cycle --task "add feature" --repo . --live
+```
+Expected artifacts:
+- `~/.clawdbot/workflows/<runId>/phases/<n>-<phase>/handoff/`
+- `~/.clawdbot/workflows/<runId>/phases/<n>-<phase>/session.jsonl`
+- Orchestrator + observability logs:
+  - `events.jsonl` (observability)
+  - `orchestrator-events.jsonl` (orchestrator)
 
 ---
 

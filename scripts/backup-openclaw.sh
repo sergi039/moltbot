@@ -126,7 +126,77 @@ else
   echo "  ⚠ Workflows directory not found (optional)"
 fi
 
-# 5. Create VERSION file
+# 7. Backup memory databases (facts.db + main.sqlite)
+MEMORY_DIR="$OPENCLAW_DIR/memory"
+if [[ -d "$MEMORY_DIR" ]]; then
+  echo "Backing up memory databases..."
+  mkdir -p "$BACKUP_DIR/memory"
+
+  # Facts DB - use sqlite3 backup for consistency (avoids copying during write)
+  if [[ -f "$MEMORY_DIR/facts.db" ]]; then
+    if command -v sqlite3 &> /dev/null; then
+      sqlite3 "$MEMORY_DIR/facts.db" ".backup '$BACKUP_DIR/memory/facts.db'" 2>/dev/null || \
+        cp "$MEMORY_DIR/facts.db" "$BACKUP_DIR/memory/"
+    else
+      cp "$MEMORY_DIR/facts.db" "$BACKUP_DIR/memory/"
+    fi
+    echo "  ✓ memory/facts.db"
+  fi
+
+  # Vector memory (main.sqlite)
+  if [[ -f "$MEMORY_DIR/main.sqlite" ]]; then
+    if command -v sqlite3 &> /dev/null; then
+      sqlite3 "$MEMORY_DIR/main.sqlite" ".backup '$BACKUP_DIR/memory/main.sqlite'" 2>/dev/null || \
+        cp "$MEMORY_DIR/main.sqlite" "$BACKUP_DIR/memory/"
+    else
+      cp "$MEMORY_DIR/main.sqlite" "$BACKUP_DIR/memory/"
+    fi
+    echo "  ✓ memory/main.sqlite"
+  fi
+else
+  echo "  ⚠ Memory directory not found (optional)"
+fi
+
+# 8. Backup agents (sessions history)
+AGENTS_DIR="$OPENCLAW_DIR/agents"
+if [[ -d "$AGENTS_DIR" ]]; then
+  echo "Backing up agents (sessions history)..."
+  mkdir -p "$BACKUP_DIR/agents"
+
+  # Count sessions for reporting
+  SESSION_COUNT=0
+  TOTAL_SIZE=0
+
+  for agent_dir in "$AGENTS_DIR"/*/; do
+    if [[ -d "$agent_dir" ]]; then
+      agent_name=$(basename "$agent_dir")
+      sessions_dir="$agent_dir/sessions"
+
+      if [[ -d "$sessions_dir" ]]; then
+        mkdir -p "$BACKUP_DIR/agents/$agent_name/sessions"
+        cp -R "$sessions_dir"/* "$BACKUP_DIR/agents/$agent_name/sessions/" 2>/dev/null || true
+
+        # Count files
+        count=$(find "$sessions_dir" -name "*.jsonl" -o -name "sessions.json" 2>/dev/null | wc -l | tr -d ' ')
+        SESSION_COUNT=$((SESSION_COUNT + count))
+
+        # Get size
+        size=$(du -sk "$sessions_dir" 2>/dev/null | cut -f1 || echo 0)
+        TOTAL_SIZE=$((TOTAL_SIZE + size))
+      fi
+    fi
+  done
+
+  if [[ "$SESSION_COUNT" -gt 0 ]]; then
+    echo "  ✓ agents/*/sessions/ ($SESSION_COUNT files, ${TOTAL_SIZE}KB)"
+  else
+    echo "  ⚠ No session files found"
+  fi
+else
+  echo "  ⚠ Agents directory not found (optional)"
+fi
+
+# 9. Create VERSION file
 echo "Creating VERSION file..."
 VERSION=""
 

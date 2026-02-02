@@ -72,11 +72,3 @@ export {
 // Risk assessment
 export type { RiskLevel, RiskAssessment, RiskFactor } from "./risk.js";
 export { assessRisk, getRiskLevelColor, getRiskLevelLabel } from "./risk.js";
-
-// Runtime wiring
-export type { PolicyRuntimeOptions, PolicyRuntime } from "./runtime.js";
-export {
-  createPolicyRuntime,
-  createNonInteractivePolicyRuntime,
-  DEFAULT_APPROVAL_TIMEOUT_MS,
-} from "./runtime.js";

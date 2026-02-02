@@ -7,9 +7,8 @@
 
 import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { readFile, writeFile, rename, rm, unlink } from "node:fs/promises";
-import { join, dirname } from "node:path";
 import os from "node:os";
-
+import { join, dirname } from "node:path";
 import type { WorkflowRun, WorkflowEvent, RetentionConfig } from "../types.js";
 import {
   DEFAULT_WORKFLOWS_DIR,
@@ -173,7 +172,7 @@ export async function logWorkflowEvent(event: WorkflowEvent): Promise<void> {
 }
 
 export async function getWorkflowEvents(runId: string): Promise<WorkflowEvent[]> {
-  const logPath = join(getWorkflowDir(runId), "events.jsonl");
+  const logPath = join(getWorkflowDir(runId), "orchestrator-events.jsonl");
 
   if (!existsSync(logPath)) {
     return [];
@@ -316,4 +315,49 @@ export async function saveStateWithChecksum(run: WorkflowRun): Promise<void> {
   const checksum = computeStateChecksum(run);
   const checksumPath = join(getWorkflowDir(run.id), "state.checksum");
   await writeFile(checksumPath, checksum, "utf-8");
+}
+
+// ============================================================================
+// Global Event Logging
+// ============================================================================
+
+const GLOBAL_EVENTS_FILE = "orchestrator-events.jsonl";
+
+export interface GlobalEvent {
+  type: string;
+  timestamp: number;
+  data?: Record<string, unknown>;
+}
+
+/**
+ * Log a global event to the orchestrator events log.
+ * Events are appended to ~/.clawdbot/workflows/orchestrator-events.jsonl
+ */
+export async function logGlobalEvent(event: GlobalEvent): Promise<void> {
+  const storagePath = getWorkflowStoragePath();
+  mkdirSync(storagePath, { recursive: true });
+
+  const logPath = join(storagePath, GLOBAL_EVENTS_FILE);
+  const line = JSON.stringify(event) + "\n";
+
+  const { appendFile } = await import("node:fs/promises");
+  await appendFile(logPath, line, "utf-8");
+}
+
+/**
+ * Read global events from the orchestrator events log.
+ * Returns events from ~/.clawdbot/workflows/orchestrator-events.jsonl
+ */
+export async function getGlobalEvents(): Promise<GlobalEvent[]> {
+  const storagePath = getWorkflowStoragePath();
+  const logPath = join(storagePath, GLOBAL_EVENTS_FILE);
+
+  if (!existsSync(logPath)) {
+    return [];
+  }
+
+  const content = await readFile(logPath, "utf-8");
+  const lines = content.trim().split("\n").filter(Boolean);
+
+  return lines.map((line) => JSON.parse(line) as GlobalEvent);
 }

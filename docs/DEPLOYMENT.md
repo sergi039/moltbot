@@ -78,6 +78,22 @@ Each environment uses its own isolated state directory:
 
 ---
 
+## 5.1) Skills Overlay (Upstream + Local)
+
+We keep upstream skills in `skills/` and local/custom skills in `skills-local/`.
+During deployment, both are merged into the runtime skills directory.
+
+Sync command:
+```bash
+./scripts/sync-skills.sh --profile default
+```
+
+Overlay behavior:
+- `skills/` is the base (upstream)
+- `skills-local/` overrides or adds custom skills
+
+---
+
 ## 6) Gateway Config Requirements
 
 Gateway **will not start** without these config values:

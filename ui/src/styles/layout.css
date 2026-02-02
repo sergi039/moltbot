@@ -411,6 +411,40 @@
   color: var(--accent);
 }
 
+/* Build info display at bottom of nav */
+.nav-build-info {
+  margin-top: auto;
+  padding: 8px 12px;
+  font-size: 10px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.nav--collapsed .nav-build-info {
+  display: none;
+}
+
+.nav-build-info__label {
+  opacity: 0.7;
+}
+
+.nav-build-info__sha {
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background 0.15s ease;
+}
+
+.nav-build-info__sha:hover {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
 /* ===========================================
    Content Area
    =========================================== */

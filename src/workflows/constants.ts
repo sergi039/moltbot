@@ -37,6 +37,8 @@ export const DEFAULT_MAX_REVIEW_ITERATIONS = 3;
 export const DEFAULT_MAX_RETRIES = 2;
 export const DEFAULT_MAX_CONCURRENT_WORKFLOWS = 5;
 export const DEFAULT_MAX_COMPLETED_WORKFLOWS = 20;
+export const DEFAULT_MAX_TASKS = 50;
+export const DEFAULT_MAX_AGENT_RUNS = 100;
 
 // ============================================================================
 // Default Settings
@@ -73,6 +75,9 @@ export const DEFAULT_RETENTION_CONFIG: RetentionConfig = {
   failedLogRetentionDays: 30,
   artifactRetentionDays: 30,
 };
+
+/** Default interval for cleanup scheduler (in minutes) */
+export const DEFAULT_CLEANUP_INTERVAL_MINUTES = 60;
 
 // ============================================================================
 // Validation
@@ -165,3 +170,11 @@ export const PHASE_PLAN_REVIEW = "plan-review";
 export const PHASE_EXECUTION = "execution";
 export const PHASE_CODE_REVIEW = "code-review";
 export const PHASE_FINALIZE = "finalize";
+
+// ============================================================================
+// Intent Routing Defaults
+// ============================================================================
+
+export const DEFAULT_INTENT_MIN_CONFIDENCE = 0.7;
+export const DEFAULT_INTENT_ROUTING_ENABLED = false;
+export const DEFAULT_INTENT_AUTO_START = false;

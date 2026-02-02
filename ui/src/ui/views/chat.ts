@@ -248,6 +248,16 @@ export function renderChat(props: ChatProps) {
       ${renderCompactionIndicator(props.compactionStatus)}
 
       ${
+        // P0 diagnostics: show session key badge
+        props.sessionKey
+          ? html`<div class="session-key-badge" title="Session Key: ${props.sessionKey}">
+              <span class="session-key-badge__label">session:</span>
+              <code class="session-key-badge__value">${props.sessionKey}</code>
+            </div>`
+          : nothing
+      }
+
+      ${
         props.focusMode
           ? html`
             <button

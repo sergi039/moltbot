@@ -101,6 +101,10 @@ export interface WorkflowSettings {
   maxDurationMs: number;
   /** Max iterations for review loop */
   maxReviewIterations: number;
+  /** Max tasks allowed in a workflow */
+  maxTasks?: number;
+  /** Max agent runs (live mode only) */
+  maxAgentRuns?: number;
   /** Auto-commit after each phase */
   autoCommit: boolean;
   /** Notify user between phases */

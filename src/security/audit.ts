@@ -13,6 +13,7 @@ import { probeGateway } from "../gateway/probe.js";
 import { readChannelAllowFromStore } from "../pairing/pairing-store.js";
 import {
   collectAttackSurfaceSummaryFindings,
+  collectBackupStalenessFindings,
   collectExposureMatrixFindings,
   collectHooksHardeningFindings,
   collectIncludeFilePermFindings,
@@ -919,6 +920,7 @@ export async function runSecurityAudit(opts: SecurityAuditOptions): Promise<Secu
 
   findings.push(...collectAttackSurfaceSummaryFindings(cfg));
   findings.push(...collectSyncedFolderFindings({ stateDir, configPath }));
+  findings.push(...(await collectBackupStalenessFindings({ env })));
 
   findings.push(...collectGatewayConfigFindings(cfg, env));
   findings.push(...collectBrowserControlFindings(cfg));

@@ -110,6 +110,7 @@ export {
   listRunningWorkflows,
   deleteWorkflow,
   cleanupOldWorkflows,
+  getGlobalEvents,
   type WorkflowSummary,
   type CleanupResult,
 } from "./state/persistence.js";
@@ -281,7 +282,6 @@ export {
 // ============================================================================
 
 import type { WorkflowDefinition } from "./types.js";
-import { WorkflowOrchestrator } from "./orchestrator.js";
 import {
   DEFAULT_WORKFLOW_TIMEOUT_MS,
   DEFAULT_MAX_REVIEW_ITERATIONS,
@@ -298,6 +298,7 @@ import {
   PHASE_CODE_REVIEW,
   PHASE_FINALIZE,
 } from "./constants.js";
+import { WorkflowOrchestrator } from "./orchestrator.js";
 
 /**
  * Standard Dev Cycle workflow definition.
