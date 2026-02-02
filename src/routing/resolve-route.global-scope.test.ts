@@ -21,8 +21,8 @@ describe("resolveAgentRoute with session.scope=global", () => {
       peer: { kind: "dm", id: "123456789" },
     });
 
-    expect(route.sessionKey).toBe("agent:main:main");
-    expect(route.mainSessionKey).toBe("agent:main:main");
+    expect(route.sessionKey).toBe("global");
+    expect(route.mainSessionKey).toBe("global");
   });
 
   it("routes telegram group to main session when scope=global", () => {
@@ -37,8 +37,8 @@ describe("resolveAgentRoute with session.scope=global", () => {
       peer: { kind: "group", id: "-1001234567890" },
     });
 
-    expect(route.sessionKey).toBe("agent:main:main");
-    expect(route.mainSessionKey).toBe("agent:main:main");
+    expect(route.sessionKey).toBe("global");
+    expect(route.mainSessionKey).toBe("global");
   });
 
   it("routes webchat to main session when scope=global", () => {
@@ -53,7 +53,7 @@ describe("resolveAgentRoute with session.scope=global", () => {
       peer: { kind: "dm", id: "web-user-1" },
     });
 
-    expect(route.sessionKey).toBe("agent:main:main");
+    expect(route.sessionKey).toBe("global");
   });
 
   it("uses per-peer session when scope is not set (default behavior)", () => {
@@ -123,7 +123,7 @@ describe("resolveAgentRoute with session.scope=global", () => {
 
     // Both should be the same main session
     expect(routeDm.sessionKey).toBe(routeGroup.sessionKey);
-    expect(routeDm.sessionKey).toBe("agent:main:main");
+    expect(routeDm.sessionKey).toBe("global");
   });
 
   it("respects scope=global with per-sender fallback value", () => {
