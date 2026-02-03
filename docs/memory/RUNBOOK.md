@@ -517,6 +517,25 @@ When set, the script will send a Telegram message on:
 - UI not responding (non‑200)
 - `openclaw status` health check failure
 
+## Perplexity (web_search) Configuration
+
+Policy:
+- API key must live in **env**, not in `openclaw.json`.
+- JSON should only store `baseUrl` + `model`.
+
+Verify:
+```bash
+pnpm openclaw config get tools.web.search.perplexity
+pnpm openclaw config get env.PERPLEXITY_API_KEY   # should be empty
+echo $PERPLEXITY_API_KEY
+```
+
+Fix:
+```bash
+pnpm openclaw config unset env.PERPLEXITY_API_KEY
+export PERPLEXITY_API_KEY="pplx-..."
+```
+
 ---
 
 ### Verification Report (2026-02-01)
