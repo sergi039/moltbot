@@ -46,7 +46,7 @@ pnpm build
 pnpm link --global
 ```
 
-> **Forking?** See [Branching Model](/BRANCHING) for the recommended mirror + release branch strategy.
+> **Forking?** See [Branching Model](/BRANCHING) for the standard upstream workflow.
 
 ## The two-phone setup (recommended)
 

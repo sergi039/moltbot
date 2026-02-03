@@ -48,10 +48,9 @@ Use WebFetch when needed:
 Auto-updates are **disabled** for production. The daily cron only checks upstream and notifies.
 
 Update flow (manual only):
-1) Sync `main` with `upstream/main` (mirror branch)
+1) Sync `main` with `upstream/main`
 2) Validate in dev
-3) Merge into `release/memory-v1`
-4) Deploy to prod from `release/memory-v1`
+3) Deploy to prod from `main`
 
 ## exe.dev VM ops (general)
 

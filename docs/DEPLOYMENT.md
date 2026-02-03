@@ -323,113 +323,50 @@ launchctl kickstart -k gui/$UID/com.moltbot.gateway.prod
 
 ---
 
-## Release plan (Dev → Prod)
+## Update plan (manual only)
 
-This section is the shared source of truth for production releases. Architect #2 should review and confirm before rollout.
+This is the shared source of truth for production updates. Auto‑update is disabled; daily cron only checks and notifies.
 
 ### 0) Preconditions
 
-- Dev repo: `~/moltbot` has all changes committed on a release branch.
-- Prod repo: `~/openclaw-prod` is clean and matches `upstream/main`.
+- Repo: `~/openclaw-prod` is clean.
+- Branch: `main` matches `upstream/main`.
 - State dirs are isolated:
   - prod: `~/.openclaw`
   - dev: `~/.openclaw-dev`
 
-### 1) Freeze window
-
-- Announce release window.
-- Pause cron jobs if needed.
-
-### 2) Build + test (dev)
-
-```
-cd ~/moltbot
-pnpm install
-pnpm build
-pnpm test
-```
-
-### 3) Tag release (dev)
-
-```
-git checkout -b release/memory-v1
-git status
-git commit -am "release: memory system"
-```
-
-### 4) Promote to prod
+### 1) Build + test
 
 ```
 cd ~/openclaw-prod
-git fetch upstream
-git reset --hard upstream/main
-git fetch ~/moltbot release/memory-v1
-git merge --ff-only FETCH_HEAD
 pnpm install
 pnpm ui:build   # REQUIRED: rebuild control panel UI
 pnpm build
 ```
 
-### 5) Restart prod gateway
+### 2) Restart gateway
 
 ```
 launchctl kickstart -k gui/$UID/com.moltbot.gateway.prod
 ```
 
-### 6) Post‑deploy verification
+### 3) Post‑update verification
 
-- `openclaw status` shows Facts Memory row.
-- `openclaw memory facts health --json` returns ok.
-- UI dashboard loads Facts Memory panels.
+- `openclaw status` OK.
+- UI dashboard loads at `http://127.0.0.1:18789/overview`.
 - Cron jobs visible in `~/.openclaw/cron/jobs.json`.
 
-### 7) Rollback procedure
+### 4) Rollback
 
 ```
 cd ~/openclaw-prod
+git fetch upstream
 git reset --hard upstream/main
 pnpm install
 pnpm ui:build
 pnpm build
 launchctl kickstart -k gui/$UID/com.moltbot.gateway.prod
 ```
-
-### Architect #2 sign‑off
-
-```
-Status: approved
-Owner: Claude (Architect #2)
-Date: 2026-02-01
-Notes:
-  Review completed. All phases (1-8) implemented and tested.
-
-  Checklist:
-  ✓ 200+ tests pass
-  ✓ Build succeeds
-  ✓ Documentation complete (OPERATIONS, ROADMAP, RUNBOOK, RELEASE-NOTES)
-  ✓ API endpoints documented and tested
-  ✓ UI components integrated
-  ✓ Rollback procedure documented
-
-  Concerns: None blocking.
-
-  Recommendation: Proceed with release after Architect #1 approval.
-
-  Addendum (2026-02-02):
-  - Docs updated for macOS app update rules.
-  - RUNBOOK includes upstream update checklist + macOS app notes.
-  - Commit: c3cc2de5e (release/memory-v1).
-```
-
-### Architect #1 sign‑off
-
-```
-Status: approved
-Owner: Peter (Architect #1)
-Date: 2026-02-01
-Notes:
-  - Все фазы памяти закрыты по docs/memory/ROADMAP.md
-  - Все тесты пройдены, build успешен
   - Документация и rollback присутствуют
   - Риски: приемлемые, процедура отката зафиксирована
 
