@@ -495,6 +495,19 @@ Operational rule:
 - Update Gateway from `main` (manual flow).
 - Update the macOS app via official releases.
 
+## Daily Update Alerts (Optional)
+
+If you use `~/openclaw-ops/scripts/update-daily.sh`, you can enable Telegram alerts:
+
+```bash
+export OPENCLAW_ALERT_TARGET="15589784"  # your Telegram chat_id
+```
+
+When set, the script will send a Telegram message on:
+- update failures
+- UI not responding (non‑200)
+- `openclaw status` health check failure
+
 ---
 
 ### Verification Report (2026-02-01)
