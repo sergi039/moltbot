@@ -493,6 +493,15 @@ Key points:
 
 Operational rule:
 - Update Gateway from `main` (manual flow).
+
+## macOS App Build Status (Known Issue)
+
+Current state: macOS app rebuild may fail due to **Swift macro compatibility** in `swiftui-math`.
+
+Guidance:
+- Do **not** block gateway releases on macOS app rebuilds.
+- Use the latest **working** app binary (e.g. v2026.2.1).
+- Track upstream fix for Swift macro compatibility; rebuild once resolved.
 - Update the macOS app via official releases.
 
 ## Daily Update Alerts (Optional)
