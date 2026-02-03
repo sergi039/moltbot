@@ -217,6 +217,32 @@ grep "memory.health\|memory.alert" /var/log/openclaw/gateway.log
    moltbot memory facts stats --json | jq '.lastExtractionAt'
    ```
 
+### Update Policy (CRITICAL)
+
+**Auto-updates are DISABLED in production.** The gateway runs from `release/memory-v1` only.
+
+Update chain:
+```
+upstream/main → main (mirror) → dev → release/memory-v1 → prod
+```
+
+Rules:
+- **NO auto-pull** in prod repo
+- Daily cron only does `git fetch` + notification (no apply)
+- All updates require manual merge into `release/memory-v1`
+- Gateway preflight blocks startup if branch != `release/memory-v1`
+
+Before any cron or check, note the SHA:
+```bash
+cd ~/openclaw-prod
+SHA_BEFORE=$(git rev-parse HEAD)
+# ... run check ...
+SHA_AFTER=$(git rev-parse HEAD)
+[[ "$SHA_BEFORE" == "$SHA_AFTER" ]] && echo "OK: no change" || echo "ERROR: SHA changed!"
+```
+
+See: [DEPLOYMENT.md#update-policy-critical](/DEPLOYMENT#update-policy-critical)
+
 ### Weekly Maintenance
 
 1. **Run cleanup** (if not automated)

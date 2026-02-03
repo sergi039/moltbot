@@ -57,6 +57,57 @@ OPENCLAW_STATE_DIR=~/.openclaw-dev pnpm openclaw-dev gateway run
 
 ---
 
+## Update Policy (CRITICAL)
+
+**Auto-updates are DISABLED in production.** Updates follow a manual chain only.
+
+### Update Chain
+
+```
+upstream/main → origin/main (mirror) → dev (~/moltbot) → release/memory-v1 → prod (~/openclaw-prod)
+```
+
+### Rules
+
+1. **Production never auto-updates** — no cron job, no background pull
+2. **Daily cron only checks** — fetch upstream, notify if new commits, but NO apply
+3. **All updates are manual** — explicit merge/cherry-pick into `release/memory-v1`
+4. **Gateway preflight enforces branch** — won't start if not on `release/memory-v1`
+
+### Manual Update Procedure
+
+```bash
+# 1. Update main mirror (in dev repo)
+cd ~/moltbot
+git checkout main
+git fetch upstream
+git reset --hard upstream/main
+
+# 2. Test in dev
+git checkout release/memory-v1
+git merge main
+pnpm install && pnpm build && pnpm test
+
+# 3. Deploy to prod
+cd ~/openclaw-prod
+git fetch ~/moltbot release/memory-v1
+git merge FETCH_HEAD
+pnpm ui:build && pnpm build
+./scripts/start-gateway-release.sh --skip-build
+```
+
+### Verification
+
+After any update check (manual or cron), verify no SHA change:
+
+```bash
+cd ~/openclaw-prod
+git rev-parse HEAD  # Should match before check
+git status          # Should be clean
+```
+
+---
+
 ## 3) Production Update Flow (Upstream)
 
 Only update prod from a clean repo.
