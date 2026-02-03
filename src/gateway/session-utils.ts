@@ -25,6 +25,7 @@ import {
   normalizeAgentId,
   normalizeMainKey,
   parseAgentSessionKey,
+  buildAgentMainSessionKey,
 } from "../routing/session-key.js";
 import { normalizeSessionDeliveryFields } from "../utils/delivery-context.js";
 import {
@@ -184,7 +185,23 @@ export function loadSessionEntry(sessionKey: string) {
   const agentId = resolveSessionStoreAgentId(cfg, canonicalKey);
   const storePath = resolveStorePath(sessionCfg?.store, { agentId });
   const store = loadSessionStore(storePath);
-  const entry = store[canonicalKey];
+  let entry = store[canonicalKey];
+
+  // If global scope is enabled, prefer the most recently updated main entry.
+  if (canonicalKey === "global" && sessionCfg?.scope === "global") {
+    const defaultAgentId = normalizeAgentId(resolveDefaultAgentId(cfg));
+    const mainKey = normalizeMainKey(sessionCfg?.mainKey);
+    const mainSessionKey = buildAgentMainSessionKey({
+      agentId: defaultAgentId,
+      mainKey,
+    });
+    const mainEntry = store[mainSessionKey];
+    const mainUpdated = typeof mainEntry?.updatedAt === "number" ? mainEntry.updatedAt : 0;
+    const globalUpdated = typeof entry?.updatedAt === "number" ? entry.updatedAt : 0;
+    if (mainUpdated > globalUpdated) {
+      entry = mainEntry;
+    }
+  }
 
   // P0 diagnostics: log session key resolution
   if (sessionKey !== canonicalKey) {

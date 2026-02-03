@@ -1,5 +1,6 @@
 import type { OpenClawConfig } from "../config/config.js";
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
+import { resolveMainSessionKey } from "../config/sessions/main-session.js";
 import { listBindings } from "./bindings.js";
 import {
   buildAgentMainSessionKey,
@@ -188,10 +189,14 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
 
   const choose = (agentId: string, matchedBy: ResolvedAgentRoute["matchedBy"]) => {
     const resolvedAgentId = pickFirstExistingAgentId(input.cfg, agentId);
-    const mainSessionKey = buildAgentMainSessionKey({
-      agentId: resolvedAgentId,
-      mainKey: DEFAULT_MAIN_KEY,
-    }).toLowerCase();
+    const mainSessionKey = (
+      isGlobalScope
+        ? resolveMainSessionKey(input.cfg)
+        : buildAgentMainSessionKey({
+            agentId: resolvedAgentId,
+            mainKey: DEFAULT_MAIN_KEY,
+          })
+    ).toLowerCase();
     // When session.scope=global, all messages route to the main session
     const sessionKey = isGlobalScope
       ? mainSessionKey
