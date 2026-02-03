@@ -43,6 +43,16 @@ Use WebFetch when needed:
 - **Agents**: https://docs.openclaw.ai/agents
 - **API Reference**: https://docs.openclaw.ai/api
 
+## Update Policy (IMPORTANT)
+
+Auto-updates are **disabled** for production. The daily cron only checks upstream and notifies.
+
+Update flow (manual only):
+1) Sync `main` with `upstream/main` (mirror branch)
+2) Validate in dev
+3) Merge into `release/memory-v1`
+4) Deploy to prod from `release/memory-v1`
+
 ## exe.dev VM ops (general)
 
 - Access: stable path is `ssh exe.dev` then `ssh vm-name` (assume SSH key already set).
