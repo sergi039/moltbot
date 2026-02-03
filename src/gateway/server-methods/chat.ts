@@ -38,6 +38,8 @@ import {
   capArrayByJsonBytes,
   loadSessionEntry,
   readSessionMessages,
+  resolveSessionKeyByOriginLabel,
+  resolveSessionKeysByOriginHint,
   resolveSessionModelRef,
 } from "../session-utils.js";
 import { formatForLog } from "../ws-log.js";
@@ -199,14 +201,75 @@ export const chatHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const { sessionKey, limit } = params as {
+    const { sessionKey: requestedKey, limit } = params as {
       sessionKey: string;
       limit?: number;
     };
-    const { cfg, storePath, entry } = loadSessionEntry(sessionKey);
-    const sessionId = entry?.sessionId;
-    const rawMessages =
-      sessionId && storePath ? readSessionMessages(sessionId, storePath, entry?.sessionFile) : [];
+    // Try to load session directly
+    let { cfg, storePath, entry } = loadSessionEntry(requestedKey);
+    let sessionKey = requestedKey;
+    let matchedKeys: string[] = [];
+
+    const hint = entry?.origin?.label ?? requestedKey;
+
+    // Resolve related sessions by origin label or hint (partial match)
+    matchedKeys = resolveSessionKeysByOriginHint(hint);
+    if (matchedKeys.length === 0 && !entry) {
+      const resolved = resolveSessionKeyByOriginLabel(requestedKey);
+      if (resolved) {
+        matchedKeys = [resolved];
+      }
+    }
+    if (matchedKeys.length > 0) {
+      const reloaded = loadSessionEntry(matchedKeys[0]);
+      cfg = reloaded.cfg;
+      storePath = reloaded.storePath;
+      entry = reloaded.entry;
+      sessionKey = matchedKeys[0];
+    }
+
+    const rawMessages: unknown[] = [];
+    const appendMessages = (
+      targetSessionId: string | undefined,
+      targetStorePath: string | undefined,
+      sessionFile?: string,
+    ) => {
+      if (!targetSessionId) {
+        return;
+      }
+      const items = readSessionMessages(targetSessionId, targetStorePath, sessionFile);
+      rawMessages.push(...items);
+    };
+
+    const keysToLoad: string[] = [];
+    if (entry?.sessionId) {
+      keysToLoad.push(sessionKey);
+    }
+    for (const key of matchedKeys) {
+      if (!keysToLoad.includes(key)) {
+        keysToLoad.push(key);
+      }
+    }
+
+    for (const key of keysToLoad) {
+      const loaded = key === sessionKey ? { entry, storePath } : loadSessionEntry(key);
+      if (loaded.entry?.sessionId) {
+        appendMessages(loaded.entry.sessionId, loaded.storePath, loaded.entry.sessionFile);
+      }
+    }
+    if (rawMessages.length > 1) {
+      rawMessages.sort((a, b) => {
+        const aTs =
+          (a as { timestamp?: number | string })?.timestamp ?? (a as any)?.message?.timestamp;
+        const bTs =
+          (b as { timestamp?: number | string })?.timestamp ?? (b as any)?.message?.timestamp;
+        const aMs = typeof aTs === "number" ? aTs : aTs ? Date.parse(String(aTs)) : 0;
+        const bMs = typeof bTs === "number" ? bTs : bTs ? Date.parse(String(bTs)) : 0;
+        return aMs - bMs;
+      });
+    }
+
+    const sessionId = entry?.sessionId ?? null;
     const hardMax = 1000;
     const defaultLimit = 200;
     const requested = typeof limit === "number" ? limit : defaultLimit;

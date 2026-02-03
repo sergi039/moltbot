@@ -10,6 +10,7 @@ import {
   listSessionsFromStore,
   parseGroupKey,
   resolveGatewaySessionStoreTarget,
+  resolveSessionKeyByOriginLabel,
   resolveSessionStoreKey,
 } from "./session-utils.js";
 
@@ -74,6 +75,18 @@ describe("gateway session utils", () => {
     const target = resolveGatewaySessionStoreTarget({ cfg, key: "main" });
     expect(target.canonicalKey).toBe("global");
     expect(target.agentId).toBe("ops");
+  });
+
+  test("resolveSessionStoreKey with global scope preserves explicit agent keys", () => {
+    const cfg = {
+      session: { scope: "global", mainKey: "main" },
+      agents: { list: [{ id: "main", default: true }] },
+    } as OpenClawConfig;
+    // Bare aliases map to global
+    expect(resolveSessionStoreKey({ cfg, sessionKey: "main" })).toBe("global");
+    // Explicit agent keys should NOT be remapped to global
+    expect(resolveSessionStoreKey({ cfg, sessionKey: "agent:main:main" })).toBe("agent:main:main");
+    expect(resolveSessionStoreKey({ cfg, sessionKey: "agent:ops:work" })).toBe("agent:ops:work");
   });
 
   test("resolveGatewaySessionStoreTarget uses canonical key for main alias", () => {
@@ -186,6 +199,17 @@ describe("deriveSessionTitle", () => {
       subject: "Actual Subject",
     } as SessionEntry;
     expect(deriveSessionTitle(entry)).toBe("Actual Subject");
+  });
+});
+
+describe("resolveSessionKeyByOriginLabel", () => {
+  test("returns null for empty label", () => {
+    expect(resolveSessionKeyByOriginLabel("")).toBeNull();
+    expect(resolveSessionKeyByOriginLabel("   ")).toBeNull();
+  });
+
+  test("returns null for non-existent label", () => {
+    expect(resolveSessionKeyByOriginLabel("nonexistent:label:here")).toBeNull();
   });
 });
 

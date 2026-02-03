@@ -1,5 +1,10 @@
 import { LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
+
+// Build marker for diagnostics - injected at build time via vite define
+declare const __BUILD_SHA__: string;
+declare const __BUILD_TIME__: string;
+console.info(`[OpenClaw UI] Build: ${__BUILD_SHA__} at ${__BUILD_TIME__}`);
 import type { EventLogEntry } from "./app-events";
 import type { AppViewState } from "./app-view-state";
 import type { DevicePairingList } from "./controllers/devices";

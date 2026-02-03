@@ -538,6 +538,86 @@ export function resolveSessionModelRef(
   return { provider, model };
 }
 
+/**
+ * Resolves an origin.label (e.g., "telegram:@sergios_ss") to its actual session key.
+ * This allows the UI to pass origin labels as session keys and still find the correct session.
+ */
+export function resolveSessionKeyByOriginLabel(label: string): string | null {
+  if (!label || !label.trim()) {
+    return null;
+  }
+  const trimmed = label.trim();
+  const cfg = loadConfig();
+  const { store } = loadCombinedSessionStoreForGateway(cfg);
+
+  for (const [key, entry] of Object.entries(store)) {
+    if (entry?.origin?.label === trimmed) {
+      return key;
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolves a conversational hint (label/identifier) to matching session keys.
+ * Supports partial matches against origin.label to bridge legacy session keys.
+ */
+export function resolveSessionKeysByOriginHint(label: string): string[] {
+  if (!label || !label.trim()) {
+    return [];
+  }
+  const trimmed = label.trim();
+  const needle = trimmed.toLowerCase();
+  const colonIndex = needle.indexOf(":");
+  const providerHint = colonIndex > 0 ? needle.slice(0, colonIndex) : "";
+  const labelHint = colonIndex > 0 ? needle.slice(colonIndex + 1) : needle;
+  const atIndex = labelHint.indexOf("@");
+  const altNeedle = atIndex >= 0 ? labelHint.slice(atIndex) : "";
+  const cfg = loadConfig();
+  const { store } = loadCombinedSessionStoreForGateway(cfg);
+  const defaultAgentId = normalizeAgentId(resolveDefaultAgentId(cfg));
+  const matches: string[] = [];
+
+  for (const [key, entry] of Object.entries(store)) {
+    if (key.startsWith("agent:")) {
+      const parsed = parseAgentSessionKey(key);
+      if (parsed?.agentId && normalizeAgentId(parsed.agentId) !== defaultAgentId) {
+        continue;
+      }
+      if (!parsed && !key.startsWith(`agent:${defaultAgentId}`)) {
+        continue;
+      }
+    }
+    const origin = entry?.origin;
+    const originLabel = origin?.label?.toLowerCase();
+    const originFrom = origin?.from?.toLowerCase();
+    const originTo = origin?.to?.toLowerCase();
+    if (providerHint) {
+      const originProvider = origin?.provider?.toLowerCase();
+      const deliveryProvider = entry?.deliveryContext?.channel?.toLowerCase();
+      if (originProvider !== providerHint && deliveryProvider !== providerHint) {
+        continue;
+      }
+    }
+    if (
+      originLabel &&
+      (originLabel.includes(labelHint) || (altNeedle && originLabel.includes(altNeedle)))
+    ) {
+      matches.push(key);
+      continue;
+    }
+    if (originFrom && (originFrom === needle || originFrom.includes(labelHint))) {
+      matches.push(key);
+      continue;
+    }
+    if (originTo && (originTo === needle || originTo.includes(labelHint))) {
+      matches.push(key);
+    }
+  }
+
+  return Array.from(new Set(matches));
+}
+
 export function listSessionsFromStore(params: {
   cfg: OpenClawConfig;
   storePath: string;

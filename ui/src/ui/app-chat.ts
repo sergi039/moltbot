@@ -203,14 +203,91 @@ export async function handleSendChat(
 }
 
 export async function refreshChat(host: ChatHost) {
+  // Load sessions first to validate sessionKey
+  await loadSessions(host as unknown as OpenClawApp, {
+    activeMinutes: CHAT_SESSIONS_ACTIVE_MINUTES,
+  });
+
+  // Validate sessionKey exists in loaded sessions, fallback if not
+  const fallbackKey = validateAndFallbackSessionKey(host as unknown as OpenClawApp);
+  if (fallbackKey) {
+    updateUrlSessionKey(fallbackKey);
+    host.chatMessages = [];
+    host.chatToolMessages = [];
+  }
+
+  // Now load chat history and avatar in parallel
   await Promise.all([
     loadChatHistory(host as unknown as OpenClawApp),
-    loadSessions(host as unknown as OpenClawApp, {
-      activeMinutes: CHAT_SESSIONS_ACTIVE_MINUTES,
-    }),
     refreshChatAvatar(host),
   ]);
   scheduleChatScroll(host as unknown as Parameters<typeof scheduleChatScroll>[0]);
+}
+
+type SessionValidationHost = ChatHost & {
+  sessionsResult: { sessions: Array<{ key: string }> } | null;
+  hello: {
+    snapshot?: {
+      sessionDefaults?: { mainSessionKey?: string; defaultAgentId?: string };
+    };
+  } | null;
+  lastError: string | null;
+  settings: { sessionKey: string; lastActiveSessionKey: string };
+};
+
+function validateAndFallbackSessionKey(host: SessionValidationHost): string | null {
+  const sessions = host.sessionsResult?.sessions;
+  if (!sessions || sessions.length === 0) {
+    return null; // No sessions loaded yet, skip validation
+  }
+
+  const currentKey = host.sessionKey;
+  const exists = sessions.some((s) => s.key === currentKey);
+  if (exists) {
+    return null; // Current session exists, all good
+  }
+
+  // Session not found - build fallback priority list
+  const sessionDefaults = host.hello?.snapshot?.sessionDefaults;
+  const mainSessionKey = sessionDefaults?.mainSessionKey;
+  const defaultAgentId = sessionDefaults?.defaultAgentId ?? "main";
+
+  // Fallback priority: agent:X:main > global > first non-cron > first
+  // Note: agent:main:main is preferred because that's where Telegram messages go
+  const agentMainKey = `agent:${defaultAgentId}:main`;
+  const candidates = [
+    agentMainKey,
+    "global",
+    sessions.find((s) => !s.key.includes(":cron:"))?.key,
+    sessions[0]?.key,
+  ];
+
+  const fallbackKey = candidates.find(
+    (key) => key && sessions.some((s) => s.key === key),
+  );
+
+  if (fallbackKey && fallbackKey !== currentKey) {
+    host.sessionKey = fallbackKey;
+    host.settings = {
+      ...host.settings,
+      sessionKey: fallbackKey,
+      lastActiveSessionKey: fallbackKey,
+    };
+    host.lastError = `Session "${currentKey}" not found, switched to "${fallbackKey}"`;
+    return fallbackKey;
+  }
+
+  return null;
+}
+
+function updateUrlSessionKey(sessionKey: string) {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set("session", sessionKey);
+    window.history.replaceState({}, "", url.toString());
+  } catch {
+    // Ignore URL update failures (e.g., during tests).
+  }
 }
 
 export const flushChatQueueForEvent = flushChatQueue;

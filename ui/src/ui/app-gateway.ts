@@ -71,13 +71,10 @@ function normalizeSessionKeyForDefaults(
     return mainSessionKey;
   }
   const mainKey = defaults.mainKey?.trim() || "main";
-  const defaultAgentId = defaults.defaultAgentId?.trim();
-  const isAlias =
-    raw === "main" ||
-    raw === mainKey ||
-    (defaultAgentId &&
-      (raw === `agent:${defaultAgentId}:main` || raw === `agent:${defaultAgentId}:${mainKey}`));
-  return isAlias ? mainSessionKey : raw;
+  // Only bare aliases (main, mainKey) should be normalized to mainSessionKey.
+  // Explicit agent keys (agent:X:Y) should be preserved as-is.
+  const isBareAlias = raw === "main" || raw === mainKey;
+  return isBareAlias ? mainSessionKey : raw;
 }
 
 function applySessionDefaults(host: GatewayHost, defaults?: SessionDefaultsSnapshot) {

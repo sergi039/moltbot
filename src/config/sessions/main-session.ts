@@ -66,13 +66,15 @@ export function canonicalizeMainSessionAlias(params: {
     mainKey: "main",
   });
 
-  const isMainAlias =
-    raw === "main" || raw === mainKey || raw === agentMainSessionKey || raw === agentMainAliasKey;
+  // Bare aliases (main, mainKey) can map to global when scope=global
+  // Explicit agent keys (agent:X:Y) should NEVER be remapped to global
+  const isBareMainAlias = raw === "main" || raw === mainKey;
+  const isExplicitAgentMainKey = raw === agentMainSessionKey || raw === agentMainAliasKey;
 
-  if (params.cfg?.session?.scope === "global" && isMainAlias) {
+  if (params.cfg?.session?.scope === "global" && isBareMainAlias) {
     return "global";
   }
-  if (isMainAlias) {
+  if (isBareMainAlias || isExplicitAgentMainKey) {
     return agentMainSessionKey;
   }
   return raw;
