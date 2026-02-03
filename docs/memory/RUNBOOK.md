@@ -502,6 +502,22 @@ Guidance:
 - Do **not** block gateway releases on macOS app rebuilds.
 - Use the latest **working** app binary (e.g. v2026.2.1).
 - Track upstream fix for Swift macro compatibility; rebuild once resolved.
+
+## Local-Only Features (Keep main clean)
+
+Rule: **`main` must always match `upstream/main`**.  
+If you need local-only features, keep them in a dedicated branch and never merge into `main`.
+
+Example:
+```bash
+# Save local feature
+git branch local/reset-context <commit-sha>
+
+# Return main to upstream mirror
+git fetch upstream
+git checkout main
+git reset --hard upstream/main
+```
 - Update the macOS app via official releases.
 
 ## Daily Update Alerts (Optional)
