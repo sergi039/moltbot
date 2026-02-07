@@ -210,6 +210,7 @@ export async function refreshChat(host: ChatHost) {
     }),
     refreshChatAvatar(host),
   ]);
+  ensureValidSessionKey(host as unknown as OpenClawApp);
   scheduleChatScroll(host as unknown as Parameters<typeof scheduleChatScroll>[0]);
 }
 
@@ -229,6 +230,52 @@ function resolveAgentIdForSession(host: ChatHost): string | null {
     | undefined;
   const fallback = snapshot?.sessionDefaults?.defaultAgentId?.trim();
   return fallback || "main";
+}
+
+function ensureValidSessionKey(host: OpenClawApp) {
+  const sessions = host.sessionsResult?.sessions ?? [];
+  if (sessions.length === 0) {
+    return;
+  }
+  if (sessions.some((row) => row.key === host.sessionKey)) {
+    return;
+  }
+
+  const keys = new Set(sessions.map((row) => row.key));
+  let next: string | null = null;
+
+  if (keys.has("agent:main:main")) {
+    next = "agent:main:main";
+  } else if (keys.has("global")) {
+    next = "global";
+  } else {
+    const nonCron = sessions.filter((row) => !row.key.includes(":cron:"));
+    const pick = (nonCron.length ? nonCron : sessions)
+      .slice()
+      .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0];
+    next = pick?.key ?? null;
+  }
+
+  if (!next || next === host.sessionKey) {
+    return;
+  }
+
+  host.sessionKey = next;
+  host.chatMessage = "";
+  host.chatAttachments = [];
+  host.chatStream = null;
+  host.chatStreamStartedAt = null;
+  host.chatRunId = null;
+  host.chatQueue = [];
+  resetToolStream(host as unknown as Parameters<typeof resetToolStream>[0]);
+  host.resetChatScroll();
+  host.applySettings({
+    ...host.settings,
+    sessionKey: next,
+    lastActiveSessionKey: next,
+  });
+  void host.loadAssistantIdentity();
+  void loadChatHistory(host as unknown as OpenClawApp);
 }
 
 function buildAvatarMetaUrl(basePath: string, agentId: string): string {
