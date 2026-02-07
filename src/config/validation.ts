@@ -202,6 +202,18 @@ export function validateConfigObjectWithPlugins(raw: unknown):
     }
   }
 
+  const hasExternalPlugins =
+    normalizedPlugins.enabled &&
+    pluginsConfig?.load?.paths &&
+    Array.isArray(pluginsConfig.load.paths) &&
+    pluginsConfig.load.paths.length > 0;
+  if (hasExternalPlugins && (!allow || allow.length === 0)) {
+    issues.push({
+      path: "plugins.allow",
+      message: "plugins.allow is required when external plugins are configured via load.paths",
+    });
+  }
+
   const deny = pluginsConfig?.deny ?? [];
   for (const pluginId of deny) {
     if (typeof pluginId !== "string" || !pluginId.trim()) {

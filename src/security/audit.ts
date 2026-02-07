@@ -31,7 +31,7 @@ import {
   inspectPathPermissions,
 } from "./audit-fs.js";
 
-export type SecurityAuditSeverity = "info" | "warn" | "critical";
+export type SecurityAuditSeverity = "info" | "warn" | "error" | "critical";
 
 export type SecurityAuditFinding = {
   checkId: string;
@@ -43,6 +43,7 @@ export type SecurityAuditFinding = {
 
 export type SecurityAuditSummary = {
   critical: number;
+  error: number;
   warn: number;
   info: number;
 };
@@ -85,18 +86,21 @@ export type SecurityAuditOptions = {
 
 function countBySeverity(findings: SecurityAuditFinding[]): SecurityAuditSummary {
   let critical = 0;
+  let error = 0;
   let warn = 0;
   let info = 0;
   for (const f of findings) {
     if (f.severity === "critical") {
       critical += 1;
+    } else if (f.severity === "error") {
+      error += 1;
     } else if (f.severity === "warn") {
       warn += 1;
     } else {
       info += 1;
     }
   }
-  return { critical, warn, info };
+  return { critical, error, warn, info };
 }
 
 function normalizeAllowFromList(list: Array<string | number> | undefined | null): string[] {

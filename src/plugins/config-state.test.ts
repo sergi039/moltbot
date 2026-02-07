@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizePluginsConfig } from "./config-state.js";
+import { normalizePluginsConfig, resolveEnableState } from "./config-state.js";
 
 describe("normalizePluginsConfig", () => {
   it("uses default memory slot when not specified", () => {
@@ -47,5 +47,32 @@ describe("normalizePluginsConfig", () => {
       slots: { memory: "   " },
     });
     expect(result.slots.memory).toBe("memory-core");
+  });
+});
+
+describe("resolveEnableState", () => {
+  const baseConfig = normalizePluginsConfig({});
+
+  it("denies external plugin when allowlist is empty", () => {
+    const result = resolveEnableState("ext-plugin", "config", baseConfig);
+    expect(result.enabled).toBe(false);
+    expect(result.reason).toContain("allowlist required for external plugins");
+  });
+
+  it("allows external plugin when in allowlist", () => {
+    const config = normalizePluginsConfig({
+      allow: ["ext-plugin"],
+      entries: { "ext-plugin": { enabled: true } },
+    });
+    const result = resolveEnableState("ext-plugin", "config", config);
+    expect(result.enabled).toBe(true);
+  });
+
+  it("bundled plugin unaffected by empty allowlist", () => {
+    const config = normalizePluginsConfig({
+      entries: { "bundled-plugin": { enabled: true } },
+    });
+    const result = resolveEnableState("bundled-plugin", "bundled", config);
+    expect(result.enabled).toBe(true);
   });
 });

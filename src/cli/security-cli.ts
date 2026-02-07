@@ -14,13 +14,20 @@ type SecurityAuditOptions = {
   fix?: boolean;
 };
 
-function formatSummary(summary: { critical: number; warn: number; info: number }): string {
+function formatSummary(summary: {
+  critical: number;
+  error: number;
+  warn: number;
+  info: number;
+}): string {
   const rich = isRich();
   const c = summary.critical;
+  const e = summary.error;
   const w = summary.warn;
   const i = summary.info;
   const parts: string[] = [];
   parts.push(rich ? theme.error(`${c} critical`) : `${c} critical`);
+  parts.push(rich ? theme.error(`${e} error`) : `${e} error`);
   parts.push(rich ? theme.warn(`${w} warn`) : `${w} warn`);
   parts.push(rich ? theme.muted(`${i} info`) : `${i} info`);
   return parts.join(" · ");

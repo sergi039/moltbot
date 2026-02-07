@@ -16,7 +16,7 @@ import {
   resolveMemoryVectorState,
   type Tone,
 } from "../memory/status-format.js";
-import { runSecurityAudit } from "../security/audit.js";
+import { runSecurityAudit, type SecurityAuditSeverity } from "../security/audit.js";
 import { renderTable } from "../terminal/table.js";
 import { theme } from "../terminal/theme.js";
 import { formatHealthChannelLines, type HealthSummary } from "./health.js";
@@ -420,22 +420,25 @@ export async function statusCommand(
   };
   runtime.log(theme.muted(`Summary: ${fmtSummary(securityAudit.summary)}`));
   const importantFindings = securityAudit.findings.filter(
-    (f) => f.severity === "critical" || f.severity === "warn",
+    (f) => f.severity === "critical" || f.severity === "error" || f.severity === "warn",
   );
   if (importantFindings.length === 0) {
-    runtime.log(theme.muted("No critical or warn findings detected."));
+    runtime.log(theme.muted("No critical, error, or warn findings detected."));
   } else {
-    const severityLabel = (sev: "critical" | "warn" | "info") => {
+    const severityLabel = (sev: SecurityAuditSeverity) => {
       if (sev === "critical") {
         return theme.error("CRITICAL");
+      }
+      if (sev === "error") {
+        return theme.error("ERROR");
       }
       if (sev === "warn") {
         return theme.warn("WARN");
       }
       return theme.muted("INFO");
     };
-    const sevRank = (sev: "critical" | "warn" | "info") =>
-      sev === "critical" ? 0 : sev === "warn" ? 1 : 2;
+    const sevRank = (sev: SecurityAuditSeverity) =>
+      sev === "critical" ? 0 : sev === "error" ? 1 : sev === "warn" ? 2 : 3;
     const sorted = [...importantFindings].toSorted(
       (a, b) => sevRank(a.severity) - sevRank(b.severity),
     );

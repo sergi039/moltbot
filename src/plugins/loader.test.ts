@@ -268,6 +268,7 @@ describe("loadOpenClawPlugins", () => {
       config: {
         plugins: {
           load: { paths: [plugin.file] },
+          allow: ["configurable"],
           entries: {
             configurable: {
               config: "nope" as unknown as Record<string, unknown>,
@@ -388,6 +389,7 @@ describe("loadOpenClawPlugins", () => {
       config: {
         plugins: {
           load: { paths: [plugin.file] },
+          allow: ["config-disable"],
           entries: {
             "config-disable": { enabled: false },
           },
@@ -415,6 +417,7 @@ describe("loadOpenClawPlugins", () => {
       config: {
         plugins: {
           load: { paths: [memoryA.file, memoryB.file] },
+          allow: ["memory-a", "memory-b"],
           slots: { memory: "memory-b" },
         },
       },
@@ -438,12 +441,34 @@ describe("loadOpenClawPlugins", () => {
       config: {
         plugins: {
           load: { paths: [memory.file] },
+          allow: ["memory-off"],
           slots: { memory: "none" },
         },
       },
     });
 
     const entry = registry.plugins.find((item) => item.id === "memory-off");
+    expect(entry?.status).toBe("disabled");
+  });
+
+  it("rejects plugin from load.paths when allow is empty", () => {
+    process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = "/nonexistent/bundled/plugins";
+    const plugin = writePlugin({
+      id: "no-allow",
+      body: `export default { id: "no-allow", register() {} };`,
+    });
+
+    const registry = loadOpenClawPlugins({
+      cache: false,
+      workspaceDir: plugin.dir,
+      config: {
+        plugins: {
+          load: { paths: [plugin.file] },
+        },
+      },
+    });
+
+    const entry = registry.plugins.find((p) => p.id === "no-allow");
     expect(entry?.status).toBe("disabled");
   });
 
@@ -467,6 +492,7 @@ describe("loadOpenClawPlugins", () => {
       config: {
         plugins: {
           load: { paths: [override.file] },
+          allow: ["shadow"],
           entries: {
             shadow: { enabled: true },
           },

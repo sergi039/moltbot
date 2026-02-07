@@ -29,7 +29,7 @@ import {
 
 export type SecurityAuditFinding = {
   checkId: string;
-  severity: "info" | "warn" | "critical";
+  severity: "info" | "warn" | "error" | "critical";
   title: string;
   detail: string;
   remediation?: string;
@@ -670,7 +670,7 @@ export async function collectPluginsTrustFindings(params: {
 
     findings.push({
       checkId: "plugins.extensions_no_allowlist",
-      severity: skillCommandsLikelyExposed ? "critical" : "warn",
+      severity: skillCommandsLikelyExposed ? "critical" : "error",
       title: "Extensions exist but plugins.allow is not set",
       detail:
         `Found ${pluginDirs.length} extension(s) under ${extensionsDir}. Without plugins.allow, any discovered plugin id may load (depending on config and plugin behavior).` +
