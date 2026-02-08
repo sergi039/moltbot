@@ -3469,8 +3469,10 @@ function renderUsageInsights(
 
   const topModels = aggregates.byModel.slice(0, 5).map((entry) => ({
     label: entry.model ?? "unknown",
-    value: formatCost(entry.totals.totalCost),
-    sub: `${formatTokens(entry.totals.totalTokens)} · ${entry.count} msgs`,
+    value: costHidden ? formatTokens(entry.totals.totalTokens) : formatCost(entry.totals.totalCost),
+    sub: costHidden
+      ? `${entry.count} msgs`
+      : `${formatTokens(entry.totals.totalTokens)} · ${entry.count} msgs`,
   }));
   const topProviders = aggregates.byProvider.slice(0, 5).map((entry) => ({
     label: entry.provider ?? "unknown",
@@ -3559,7 +3561,7 @@ function renderUsageInsights(
             <span class="usage-summary-hint" title=${throughputHint}>?</span>
           </div>
           <div class="usage-summary-value">${throughputLabel}</div>
-          <div class="usage-summary-sub">${throughputCostLabel}</div>
+          <div class="usage-summary-sub">${costHidden ? "" : throughputCostLabel}</div>
         </div>
         <div class="usage-summary-card">
           <div class="usage-summary-title">
@@ -3901,7 +3903,7 @@ function renderEmptyDetailState() {
   return nothing;
 }
 
-function renderSessionSummary(session: UsageSessionEntry) {
+function renderSessionSummary(session: UsageSessionEntry, costHidden = false) {
   const usage = session.usage;
   if (!usage) {
     return html`
@@ -3934,8 +3936,10 @@ function renderSessionSummary(session: UsageSessionEntry) {
   const modelItems =
     usage.modelUsage?.slice(0, 6).map((entry) => ({
       label: entry.model ?? "unknown",
-      value: formatCost(entry.totals.totalCost),
-      sub: formatTokens(entry.totals.totalTokens),
+      value: costHidden
+        ? formatTokens(entry.totals.totalTokens)
+        : formatCost(entry.totals.totalCost),
+      sub: costHidden ? `${entry.count} msgs` : formatTokens(entry.totals.totalTokens),
     })) ?? [];
 
   return html`
@@ -3998,6 +4002,7 @@ function renderSessionDetailPanel(
   contextExpanded: boolean,
   onToggleContextExpanded: () => void,
   onClose: () => void,
+  costHidden = false,
 ) {
   const label = session.label || session.key;
   const displayLabel = label.length > 50 ? label.slice(0, 50) + "…" : label;
@@ -4014,7 +4019,7 @@ function renderSessionDetailPanel(
             usage
               ? html`
             <span><strong>${formatTokens(usage.totalTokens)}</strong> tokens</span>
-            <span><strong>${formatCost(usage.totalCost)}</strong></span>
+            ${costHidden ? nothing : html`<span><strong>${formatCost(usage.totalCost)}</strong></span>`}
           `
               : nothing
           }
@@ -4022,7 +4027,7 @@ function renderSessionDetailPanel(
         <button class="session-close-btn" @click=${onClose} title="Close session details">×</button>
       </div>
       <div class="session-detail-content">
-        ${renderSessionSummary(session)}
+        ${renderSessionSummary(session, costHidden)}
         <div class="session-detail-row">
           ${renderTimeSeriesCompact(
             timeSeries,
@@ -4034,6 +4039,7 @@ function renderSessionDetailPanel(
             startDate,
             endDate,
             selectedDays,
+            costHidden,
           )}
         </div>
         <div class="session-detail-bottom">
@@ -4066,6 +4072,7 @@ function renderTimeSeriesCompact(
   startDate?: string,
   endDate?: string,
   selectedDays?: string[],
+  costHidden = false,
 ) {
   if (loading) {
     return html`
@@ -4244,7 +4251,7 @@ function renderTimeSeriesCompact(
           `;
         })}
       </svg>
-      <div class="timeseries-summary">${points.length} msgs · ${formatTokens(cumTokens)} · ${formatCost(cumCost)}</div>
+      <div class="timeseries-summary">${points.length} msgs · ${formatTokens(cumTokens)}${costHidden ? "" : ` · ${formatCost(cumCost)}`}</div>
       ${
         breakdownByType
           ? html`
@@ -5051,9 +5058,13 @@ export function renderUsage(props: UsageProps) {
                 <span class="usage-metric-badge">
                   <strong>${formatTokens(displayTotals.totalTokens)}</strong> tokens
                 </span>
-                <span class="usage-metric-badge">
-                  <strong>${formatCost(displayTotals.totalCost)}</strong> cost
-                </span>
+                ${
+                  isTokenMode
+                    ? nothing
+                    : html`<span class="usage-metric-badge">
+                        <strong>${formatCost(displayTotals.totalCost)}</strong> cost
+                      </span>`
+                }
                 <span class="usage-metric-badge">
                   <strong>${displaySessionCount}</strong>
                   session${displaySessionCount !== 1 ? "s" : ""}
@@ -5349,12 +5360,12 @@ export function renderUsage(props: UsageProps) {
           ${renderDailyChartCompact(
             filteredDaily,
             props.selectedDays,
-            props.chartMode,
+            isTokenMode ? "tokens" : props.chartMode,
             props.dailyChartMode,
             props.onDailyChartModeChange,
             props.onSelectDay,
           )}
-          ${displayTotals ? renderCostBreakdownCompact(displayTotals, props.chartMode) : nothing}
+          ${displayTotals ? renderCostBreakdownCompact(displayTotals, isTokenMode ? "tokens" : props.chartMode) : nothing}
         </div>
       </div>
       <div class="usage-grid-right">
@@ -5410,6 +5421,7 @@ export function renderUsage(props: UsageProps) {
             props.contextExpanded,
             props.onToggleContextExpanded,
             props.onClearSessions,
+            props.costHidden,
           )
         : renderEmptyDetailState()
     }

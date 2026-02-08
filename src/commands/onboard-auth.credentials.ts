@@ -28,13 +28,14 @@ export async function writeOAuthCredentials(
 export async function setAnthropicApiKey(key: string, agentDir?: string) {
   // Write to resolved agent dir so gateway finds credentials on startup.
   // Detect setup tokens (sk-ant-oat01-*) and save with correct credential type.
-  if (key.startsWith(ANTHROPIC_SETUP_TOKEN_PREFIX)) {
+  const trimmed = key.trim();
+  if (trimmed.startsWith(ANTHROPIC_SETUP_TOKEN_PREFIX)) {
     upsertAuthProfile({
       profileId: "anthropic:default",
       credential: {
         type: "token",
         provider: "anthropic",
-        token: key,
+        token: trimmed,
       },
       agentDir: resolveAuthAgentDir(agentDir),
     });
@@ -44,7 +45,7 @@ export async function setAnthropicApiKey(key: string, agentDir?: string) {
       credential: {
         type: "api_key",
         provider: "anthropic",
-        key,
+        key: trimmed,
       },
       agentDir: resolveAuthAgentDir(agentDir),
     });
