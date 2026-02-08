@@ -1,6 +1,7 @@
 import type { OAuthCredentials } from "@mariozechner/pi-ai";
 import { resolveOpenClawAgentDir } from "../agents/agent-paths.js";
 import { upsertAuthProfile } from "../agents/auth-profiles.js";
+import { ANTHROPIC_SETUP_TOKEN_PREFIX } from "./auth-token.js";
 export { CLOUDFLARE_AI_GATEWAY_DEFAULT_MODEL_REF } from "../agents/cloudflare-ai-gateway.js";
 export { XAI_DEFAULT_MODEL_REF } from "./onboard-auth.models.js";
 
@@ -26,15 +27,28 @@ export async function writeOAuthCredentials(
 
 export async function setAnthropicApiKey(key: string, agentDir?: string) {
   // Write to resolved agent dir so gateway finds credentials on startup.
-  upsertAuthProfile({
-    profileId: "anthropic:default",
-    credential: {
-      type: "api_key",
-      provider: "anthropic",
-      key,
-    },
-    agentDir: resolveAuthAgentDir(agentDir),
-  });
+  // Detect setup tokens (sk-ant-oat01-*) and save with correct credential type.
+  if (key.startsWith(ANTHROPIC_SETUP_TOKEN_PREFIX)) {
+    upsertAuthProfile({
+      profileId: "anthropic:default",
+      credential: {
+        type: "token",
+        provider: "anthropic",
+        token: key,
+      },
+      agentDir: resolveAuthAgentDir(agentDir),
+    });
+  } else {
+    upsertAuthProfile({
+      profileId: "anthropic:default",
+      credential: {
+        type: "api_key",
+        provider: "anthropic",
+        key,
+      },
+      agentDir: resolveAuthAgentDir(agentDir),
+    });
+  }
 }
 
 export async function setGeminiApiKey(key: string, agentDir?: string) {
