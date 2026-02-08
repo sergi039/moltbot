@@ -233,6 +233,10 @@ export function registerGatewayCli(program: Command) {
             defaultRuntime.log(JSON.stringify(result, null, 2));
             return;
           }
+          if ((result as { costVisible?: boolean }).costVisible === false) {
+            defaultRuntime.log("Cost tracking is not available for subscription auth.");
+            return;
+          }
           const rich = isRich();
           const summary = result as CostUsageSummary;
           for (const line of renderCostUsageSummary(summary, days, rich)) {

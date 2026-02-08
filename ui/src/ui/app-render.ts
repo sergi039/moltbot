@@ -327,6 +327,7 @@ export function renderApp(state: AppViewState) {
                 totals: state.usageResult?.totals ?? null,
                 aggregates: state.usageResult?.aggregates ?? null,
                 costDaily: state.usageCostSummary?.daily ?? [],
+                costHidden: state.usageCostHidden,
                 selectedSessions: state.usageSelectedSessions,
                 selectedDays: state.usageSelectedDays,
                 selectedHours: state.usageSelectedHours,

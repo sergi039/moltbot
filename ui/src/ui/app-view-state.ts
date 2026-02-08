@@ -152,6 +152,7 @@ export type AppViewState = {
   usageLoading: boolean;
   usageResult: SessionsUsageResult | null;
   usageCostSummary: CostUsageSummary | null;
+  usageCostHidden: boolean;
   usageError: string | null;
   usageStartDate: string;
   usageEndDate: string;

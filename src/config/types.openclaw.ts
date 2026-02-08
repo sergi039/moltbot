@@ -97,6 +97,10 @@ export type OpenClawConfig = {
   talk?: TalkConfig;
   gateway?: GatewayConfig;
   memory?: MemoryConfig;
+  usage?: {
+    /** Controls cost display: "auto" (default, hide for subscription), "always", "hide". */
+    costDisplay?: "auto" | "always" | "hide";
+  };
 };
 
 export type ConfigValidationIssue = {

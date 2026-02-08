@@ -20,6 +20,7 @@ import {
 } from "../../config/sessions.js";
 import { emitDiagnosticEvent, isDiagnosticsEnabled } from "../../infra/diagnostic-events.js";
 import { defaultRuntime } from "../../runtime.js";
+import { isCostVisible } from "../../utils/cost-display.js";
 import { estimateUsageCost, resolveModelCostConfig } from "../../utils/usage-format.js";
 import { resolveResponseUsageMode, type VerboseLevel } from "../thinking.js";
 import { runAgentTurnWithFallback } from "./agent-runner-execution.js";
@@ -470,7 +471,7 @@ export async function runReplyAgent(params: {
     const responseUsageMode = resolveResponseUsageMode(responseUsageRaw);
     if (responseUsageMode !== "off" && hasNonzeroUsage(usage)) {
       const authMode = resolveModelAuthMode(providerUsed, cfg);
-      const showCost = authMode === "api-key";
+      const showCost = isCostVisible(authMode, cfg);
       const costConfig = showCost
         ? resolveModelCostConfig({
             provider: providerUsed,

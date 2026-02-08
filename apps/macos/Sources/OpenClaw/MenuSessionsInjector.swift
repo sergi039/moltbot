@@ -31,6 +31,7 @@ final class MenuSessionsInjector: NSObject, NSMenuDelegate {
     private var usageCacheUpdatedAt: Date?
     private let usageRefreshIntervalSeconds: TimeInterval = 30
     private var cachedCostSummary: GatewayCostUsageSummary?
+    private var cachedCostHidden = false
     private var cachedCostErrorText: String?
     private var costCacheUpdatedAt: Date?
     private let costRefreshIntervalSeconds: TimeInterval = 45
@@ -409,6 +410,7 @@ extension MenuSessionsInjector {
 
     private func insertCostUsageSection(into menu: NSMenu, at cursor: Int, width: CGFloat) -> Int {
         guard self.isControlChannelConnected else { return cursor }
+        if self.cachedCostHidden { return cursor }
         guard let submenu = self.buildCostUsageSubmenu(width: width) else { return cursor }
         var cursor = cursor
 
@@ -725,7 +727,14 @@ extension MenuSessionsInjector {
         }
 
         do {
-            self.cachedCostSummary = try await CostUsageLoader.loadSummary()
+            let summary = try await CostUsageLoader.loadSummary()
+            if let summary {
+                self.cachedCostSummary = summary
+                self.cachedCostHidden = false
+            } else {
+                self.cachedCostSummary = nil
+                self.cachedCostHidden = true
+            }
             self.cachedCostErrorText = nil
         } catch {
             self.cachedCostSummary = nil

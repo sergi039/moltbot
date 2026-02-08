@@ -6,6 +6,7 @@ import { logVerbose } from "../../globals.js";
 import { createInternalHookEvent, triggerInternalHook } from "../../hooks/internal-hooks.js";
 import { scheduleGatewaySigusr1Restart, triggerOpenClawRestart } from "../../infra/restart.js";
 import { loadCostUsageSummary, loadSessionCostSummary } from "../../infra/session-cost-usage.js";
+import { isCostVisible, resolveEffectiveAuthMode } from "../../utils/cost-display.js";
 import { formatTokenCount, formatUsd } from "../../utils/usage-format.js";
 import { parseActivationCommand } from "../group-activation.js";
 import { parseSendPolicyCommand } from "../send-policy.js";
@@ -162,6 +163,13 @@ export const handleUsageCommand: CommandHandler = async (params, allowTextComman
   const rawArgs = normalized === "/usage" ? "" : normalized.slice("/usage".length).trim();
   const requested = rawArgs ? normalizeUsageDisplay(rawArgs) : undefined;
   if (rawArgs.toLowerCase().startsWith("cost")) {
+    const authMode = resolveEffectiveAuthMode(params.cfg);
+    if (!isCostVisible(authMode, params.cfg)) {
+      return {
+        shouldContinue: false,
+        reply: { text: "Cost tracking is not available for subscription auth." },
+      };
+    }
     const sessionSummary = await loadSessionCostSummary({
       sessionId: params.sessionEntry?.sessionId,
       sessionEntry: params.sessionEntry,

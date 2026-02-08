@@ -6,7 +6,7 @@ import type { CommandCategory } from "./commands-registry.types.js";
 import type { ElevatedLevel, ReasoningLevel, ThinkLevel, VerboseLevel } from "./thinking.js";
 import { lookupContextTokens } from "../agents/context.js";
 import { DEFAULT_CONTEXT_TOKENS, DEFAULT_MODEL, DEFAULT_PROVIDER } from "../agents/defaults.js";
-import { resolveModelAuthMode } from "../agents/model-auth.js";
+import { type ModelAuthMode, resolveModelAuthMode } from "../agents/model-auth.js";
 import { resolveConfiguredModelRef } from "../agents/model-selection.js";
 import { resolveSandboxRuntimeStatus } from "../agents/sandbox.js";
 import { derivePromptTokens, normalizeUsage, type UsageLike } from "../agents/usage.js";
@@ -27,6 +27,7 @@ import {
   resolveTtsConfig,
   resolveTtsPrefsPath,
 } from "../tts/tts.js";
+import { isCostVisible } from "../utils/cost-display.js";
 import {
   estimateUsageCost,
   formatTokenCount as formatTokenCountShared,
@@ -416,7 +417,7 @@ export function buildStatusMessage(args: StatusArgs): string {
   const authMode = resolveModelAuthMode(provider, args.config);
   const authLabelValue =
     args.modelAuth ?? (authMode && authMode !== "unknown" ? authMode : undefined);
-  const showCost = authLabelValue === "api-key" || authLabelValue === "mixed";
+  const showCost = isCostVisible(authLabelValue as ModelAuthMode | undefined, args.config);
   const costConfig = showCost
     ? resolveModelCostConfig({
         provider,

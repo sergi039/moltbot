@@ -618,11 +618,19 @@ export type SessionsUsageResult = {
 export type CostUsageDailyEntry = SessionsUsageTotals & { date: string };
 
 export type CostUsageSummary = {
+  costVisible?: boolean;
   updatedAt: number;
   days: number;
   daily: CostUsageDailyEntry[];
   totals: SessionsUsageTotals;
 };
+
+export type CostUsageHiddenResponse = {
+  costVisible: false;
+  reason?: string;
+};
+
+export type CostUsageResponse = CostUsageSummary | CostUsageHiddenResponse;
 
 export type SessionUsageTimePoint = {
   timestamp: number;

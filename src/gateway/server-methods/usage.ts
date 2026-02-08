@@ -22,6 +22,7 @@ import {
   type DiscoveredSession,
 } from "../../infra/session-cost-usage.js";
 import { parseAgentSessionKey } from "../../routing/session-key.js";
+import { isCostVisible, resolveEffectiveAuthMode } from "../../utils/cost-display.js";
 import {
   ErrorCodes,
   errorShape,
@@ -259,13 +260,19 @@ export const usageHandlers: GatewayRequestHandlers = {
   },
   "usage.cost": async ({ respond, params }) => {
     const config = loadConfig();
+    const authMode = resolveEffectiveAuthMode(config);
+    const costVisible = isCostVisible(authMode, config);
+    if (!costVisible) {
+      respond(true, { costVisible: false, reason: "subscription-auth" }, undefined);
+      return;
+    }
     const { startMs, endMs } = parseDateRange({
       startDate: params?.startDate,
       endDate: params?.endDate,
       days: params?.days,
     });
     const summary = await loadCostUsageSummaryCached({ startMs, endMs, config });
-    respond(true, summary, undefined);
+    respond(true, { ...summary, costVisible: true }, undefined);
   },
   "sessions.usage": async ({ respond, params }) => {
     if (!validateSessionsUsageParams(params)) {

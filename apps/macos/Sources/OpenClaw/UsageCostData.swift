@@ -28,6 +28,17 @@ struct GatewayCostUsageSummary: Codable {
     let totals: GatewayCostUsageTotals
 }
 
+/// Envelope that wraps the gateway `usage.cost` response.
+/// When `costVisible == false`, the summary fields are absent.
+struct GatewayCostUsageResponse: Codable {
+    let costVisible: Bool?
+    let reason: String?
+    let updatedAt: Double?
+    let days: Int?
+    let daily: [GatewayCostUsageDay]?
+    let totals: GatewayCostUsageTotals?
+}
+
 enum CostUsageFormatting {
     static func formatUsd(_ value: Double?) -> String? {
         guard let value, value.isFinite else { return nil }
@@ -50,11 +61,15 @@ enum CostUsageFormatting {
 
 @MainActor
 enum CostUsageLoader {
-    static func loadSummary() async throws -> GatewayCostUsageSummary {
+    static func loadSummary() async throws -> GatewayCostUsageSummary? {
         let data = try await ControlChannel.shared.request(
             method: "usage.cost",
             params: nil,
             timeoutMs: 7000)
+        let envelope = try JSONDecoder().decode(GatewayCostUsageResponse.self, from: data)
+        if envelope.costVisible == false {
+            return nil
+        }
         return try JSONDecoder().decode(GatewayCostUsageSummary.self, from: data)
     }
 }

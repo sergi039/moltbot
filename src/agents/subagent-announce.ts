@@ -12,12 +12,14 @@ import { callGateway } from "../gateway/call.js";
 import { formatDurationCompact } from "../infra/format-time/format-duration.ts";
 import { normalizeMainKey } from "../routing/session-key.js";
 import { defaultRuntime } from "../runtime.js";
+import { isCostVisible } from "../utils/cost-display.js";
 import {
   type DeliveryContext,
   deliveryContextFromSession,
   mergeDeliveryContext,
   normalizeDeliveryContext,
 } from "../utils/delivery-context.js";
+import { resolveModelAuthMode } from "./model-auth.js";
 import {
   isEmbeddedPiRunActive,
   queueEmbeddedPiMessage,
@@ -261,9 +263,12 @@ async function buildSubagentStatsLine(params: {
   } else {
     parts.push("tokens n/a");
   }
-  const costText = formatUsd(cost);
-  if (costText) {
-    parts.push(`est ${costText}`);
+  const authMode = resolveModelAuthMode(provider, cfg);
+  if (isCostVisible(authMode, cfg)) {
+    const costText = formatUsd(cost);
+    if (costText) {
+      parts.push(`est ${costText}`);
+    }
   }
   parts.push(`sessionKey ${params.sessionKey}`);
   if (sessionId) {

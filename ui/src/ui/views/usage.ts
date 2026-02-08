@@ -2133,6 +2133,7 @@ export type UsageProps = {
   totals: UsageTotals | null;
   aggregates: UsageAggregates | null;
   costDaily: CostDailyEntry[];
+  costHidden: boolean;
   selectedSessions: string[]; // Support multiple session selection
   selectedDays: string[]; // Support multiple day selection
   selectedHours: number[]; // Support multiple hour selection
@@ -3417,6 +3418,7 @@ function renderUsageInsights(
   errorHours: Array<{ label: string; value: string; sub?: string }>,
   sessionCount: number,
   totalSessions: number,
+  costHidden = false,
 ) {
   if (!totals) {
     return nothing;
@@ -3472,8 +3474,10 @@ function renderUsageInsights(
   }));
   const topProviders = aggregates.byProvider.slice(0, 5).map((entry) => ({
     label: entry.provider ?? "unknown",
-    value: formatCost(entry.totals.totalCost),
-    sub: `${formatTokens(entry.totals.totalTokens)} · ${entry.count} msgs`,
+    value: costHidden ? formatTokens(entry.totals.totalTokens) : formatCost(entry.totals.totalCost),
+    sub: costHidden
+      ? `${entry.count} msgs`
+      : `${formatTokens(entry.totals.totalTokens)} · ${entry.count} msgs`,
   }));
   const topTools = aggregates.tools.tools.slice(0, 6).map((tool) => ({
     label: tool.name,
@@ -3482,12 +3486,12 @@ function renderUsageInsights(
   }));
   const topAgents = aggregates.byAgent.slice(0, 5).map((entry) => ({
     label: entry.agentId,
-    value: formatCost(entry.totals.totalCost),
+    value: costHidden ? formatTokens(entry.totals.totalTokens) : formatCost(entry.totals.totalCost),
     sub: formatTokens(entry.totals.totalTokens),
   }));
   const topChannels = aggregates.byChannel.slice(0, 5).map((entry) => ({
     label: entry.channel,
-    value: formatCost(entry.totals.totalCost),
+    value: costHidden ? formatTokens(entry.totals.totalTokens) : formatCost(entry.totals.totalCost),
     sub: formatTokens(entry.totals.totalTokens),
   }));
 
@@ -3529,14 +3533,18 @@ function renderUsageInsights(
           <div class="usage-summary-value">${formatTokens(avgTokens)}</div>
           <div class="usage-summary-sub">Across ${aggregates.messages.total || 0} messages</div>
         </div>
-        <div class="usage-summary-card">
-          <div class="usage-summary-title">
-            Avg Cost / Msg
-            <span class="usage-summary-hint" title=${costHint}>?</span>
-          </div>
-          <div class="usage-summary-value">${formatCost(avgCost, 4)}</div>
-          <div class="usage-summary-sub">${formatCost(totals.totalCost)} total</div>
-        </div>
+        ${
+          costHidden
+            ? nothing
+            : html`<div class="usage-summary-card">
+              <div class="usage-summary-title">
+                Avg Cost / Msg
+                <span class="usage-summary-hint" title=${costHint}>?</span>
+              </div>
+              <div class="usage-summary-value">${formatCost(avgCost, 4)}</div>
+              <div class="usage-summary-sub">${formatCost(totals.totalCost)} total</div>
+            </div>`
+        }
         <div class="usage-summary-card">
           <div class="usage-summary-title">
             Sessions
@@ -4660,7 +4668,7 @@ export function renderUsage(props: UsageProps) {
     `;
   }
 
-  const isTokenMode = props.chartMode === "tokens";
+  const isTokenMode = props.costHidden || props.chartMode === "tokens";
   const hasQuery = props.query.trim().length > 0;
   const hasDraftQuery = props.queryDraft.trim().length > 0;
   // (intentionally no global Clear button in the header; chips + query clear handle this)
@@ -5173,20 +5181,24 @@ export function renderUsage(props: UsageProps) {
             <option value="local">Local</option>
             <option value="utc">UTC</option>
           </select>
-          <div class="chart-toggle">
-            <button
-              class="toggle-btn ${isTokenMode ? "active" : ""}"
-              @click=${() => props.onChartModeChange("tokens")}
-            >
-              Tokens
-            </button>
-            <button
-              class="toggle-btn ${!isTokenMode ? "active" : ""}"
-              @click=${() => props.onChartModeChange("cost")}
-            >
-              Cost
-            </button>
-          </div>
+          ${
+            props.costHidden
+              ? nothing
+              : html`<div class="chart-toggle">
+                <button
+                  class="toggle-btn ${isTokenMode ? "active" : ""}"
+                  @click=${() => props.onChartModeChange("tokens")}
+                >
+                  Tokens
+                </button>
+                <button
+                  class="toggle-btn ${!isTokenMode ? "active" : ""}"
+                  @click=${() => props.onChartModeChange("cost")}
+                >
+                  Cost
+                </button>
+              </div>`
+          }
           <button
             class="btn btn-sm usage-action-btn usage-primary-btn"
             @click=${props.onRefresh}
@@ -5325,6 +5337,7 @@ export function renderUsage(props: UsageProps) {
       buildPeakErrorHours(aggregateSessions, props.timeZone),
       displaySessionCount,
       totalSessions,
+      props.costHidden,
     )}
 
     ${renderUsageMosaic(aggregateSessions, props.timeZone, props.selectedHours, props.onSelectHour)}
