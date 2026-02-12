@@ -39,10 +39,7 @@ function injectBuildSha() {
   content = content.replace(/<html([^>]*)>/, `<html$1 data-build-sha="${sha}">`);
 
   // Also add a meta tag for easier access
-  content = content.replace(
-    /<\/head>/,
-    `  <meta name="build-sha" content="${sha}" />\n  </head>`,
-  );
+  content = content.replace(/<\/head>/, `  <meta name="build-sha" content="${sha}" />\n  </head>`);
 
   fs.writeFileSync(indexPath, content, "utf-8");
   console.log(`[ui] injected build SHA: ${sha.slice(0, 8)}...`);

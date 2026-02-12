@@ -6,13 +6,13 @@ This document describes the security policies and best practices for managing se
 
 ### Primary Locations
 
-| Type | Location | Permissions |
-|------|----------|-------------|
-| Main config | `~/.openclaw/openclaw.json` | 600 |
-| Environment vars | `~/.openclaw/.env` | 600 |
-| OAuth credentials | `~/.openclaw/credentials/oauth.json` | 600 |
-| Agent auth profiles | `~/.openclaw/agents/<id>/agent/auth-profiles.json` | 600 |
-| Backups | `~/Backups/openclaw/` | 700 (dirs), 600 (files) |
+| Type                | Location                                           | Permissions             |
+| ------------------- | -------------------------------------------------- | ----------------------- |
+| Main config         | `~/.openclaw/openclaw.json`                        | 600                     |
+| Environment vars    | `~/.openclaw/.env`                                 | 600                     |
+| OAuth credentials   | `~/.openclaw/credentials/oauth.json`               | 600                     |
+| Agent auth profiles | `~/.openclaw/agents/<id>/agent/auth-profiles.json` | 600                     |
+| Backups             | `~/Backups/openclaw/`                              | 700 (dirs), 600 (files) |
 
 ### Directory Permissions
 
@@ -52,6 +52,7 @@ SLACK_BOT_TOKEN=xoxb-xxx
 ### Telegram
 
 Preferred: Use environment variable
+
 ```json
 {
   "channels": {
@@ -63,6 +64,7 @@ Preferred: Use environment variable
 ```
 
 Alternative: Use tokenFile
+
 ```json
 {
   "channels": {
@@ -80,17 +82,19 @@ Same pattern - prefer env vars or tokenFile over inline tokens.
 ## What NOT to Do
 
 ❌ **Never store tokens directly in openclaw.json**
+
 ```json
 {
   "channels": {
     "telegram": {
-      "botToken": "123456:ABCxxx"  // BAD!
+      "botToken": "123456:ABCxxx" // BAD!
     }
   }
 }
 ```
 
 ❌ **Never commit credentials to git**
+
 - API keys
 - Bot tokens
 - OAuth secrets

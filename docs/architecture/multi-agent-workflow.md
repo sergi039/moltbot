@@ -9,6 +9,7 @@ Technical specification for orchestrating Claude and Codex agents in collaborati
 ### 1.1 Problem Statement
 
 Current moltbot supports running individual coding agents (Claude Code, Codex) but lacks:
+
 - Structured handoff between agents
 - Iterative review loops
 - Shared artifact management
@@ -35,14 +36,14 @@ Current moltbot supports running individual coding agents (Claude Code, Codex) b
 
 ### 2.1 Threat Model
 
-| Threat | Risk | Mitigation |
-|--------|------|------------|
-| Agent executes malicious code | High | Sandbox by default, exec approvals for elevated |
-| Secrets leaked in artifacts/logs | High | Automatic redaction, no .env copying |
-| Agent modifies files outside workspace | Medium | Filesystem scope enforcement |
-| Workflow state tampering | Low | Checksums on state files |
-| Token/API key exposure | High | Never persist keys in artifacts |
-| Unbounded resource consumption | Medium | Timeouts, disk quotas, process limits |
+| Threat                                 | Risk   | Mitigation                                      |
+| -------------------------------------- | ------ | ----------------------------------------------- |
+| Agent executes malicious code          | High   | Sandbox by default, exec approvals for elevated |
+| Secrets leaked in artifacts/logs       | High   | Automatic redaction, no .env copying            |
+| Agent modifies files outside workspace | Medium | Filesystem scope enforcement                    |
+| Workflow state tampering               | Low    | Checksums on state files                        |
+| Token/API key exposure                 | High   | Never persist keys in artifacts                 |
+| Unbounded resource consumption         | Medium | Timeouts, disk quotas, process limits           |
 
 ### 2.2 Sandbox Integration
 
@@ -81,6 +82,7 @@ interface WorkflowSecurityPolicy {
 ```
 
 **Default Policy:**
+
 ```json
 {
   "sandboxed": true,
@@ -101,33 +103,35 @@ interface WorkflowSecurityPolicy {
 
 Blocked tools must reference actual tool IDs from the system. Common security-sensitive tools:
 
-| Tool ID | Description | Risk |
-|---------|-------------|------|
-| `Bash` | Shell command execution | High - can execute arbitrary commands |
-| `Write` | File creation/overwrite | Medium - can overwrite critical files |
-| `Edit` | File modification | Medium - can modify sensitive files |
-| `WebFetch` | HTTP requests | Medium - data exfiltration risk |
+| Tool ID    | Description             | Risk                                  |
+| ---------- | ----------------------- | ------------------------------------- |
+| `Bash`     | Shell command execution | High - can execute arbitrary commands |
+| `Write`    | File creation/overwrite | Medium - can overwrite critical files |
+| `Edit`     | File modification       | Medium - can modify sensitive files   |
+| `WebFetch` | HTTP requests           | Medium - data exfiltration risk       |
 
 > **Note:** Tool IDs are defined in the agent's tool registry. Verify against `src/tools/` or the agent's tool manifest before adding to blockedTools. Invalid tool IDs are silently ignored.
 
 ### 2.3 Secrets & Credential Handling
 
 **Rules:**
+
 1. **Never copy `.env` files** into workflow workspace
 2. **Never persist API keys** in artifacts or logs
 3. **Redact patterns** matching known secret formats before logging
 4. **Inherit auth profiles** from moltbot config, don't pass tokens directly
 
 **Redaction Patterns:**
+
 ```typescript
 const REDACTION_PATTERNS = [
-  /sk-[a-zA-Z0-9]{20,}/g,           // OpenAI keys
-  /sk-ant-[a-zA-Z0-9-]{40,}/g,      // Anthropic keys
-  /ghp_[a-zA-Z0-9]{36}/g,           // GitHub PAT
-  /AKIA[0-9A-Z]{16}/g,              // AWS Access Key
-  /-----BEGIN [A-Z]+ KEY-----/g,    // Private keys
-  /Bearer [a-zA-Z0-9._-]+/gi,       // Bearer tokens
-  /password["']?\s*[:=]\s*["'][^"']+["']/gi,  // Password assignments
+  /sk-[a-zA-Z0-9]{20,}/g, // OpenAI keys
+  /sk-ant-[a-zA-Z0-9-]{40,}/g, // Anthropic keys
+  /ghp_[a-zA-Z0-9]{36}/g, // GitHub PAT
+  /AKIA[0-9A-Z]{16}/g, // AWS Access Key
+  /-----BEGIN [A-Z]+ KEY-----/g, // Private keys
+  /Bearer [a-zA-Z0-9._-]+/gi, // Bearer tokens
+  /password["']?\s*[:=]\s*["'][^"']+["']/gi, // Password assignments
 ];
 
 function redactSecrets(text: string): string {
@@ -146,10 +150,11 @@ Some workflows may need elevated (non-sandboxed) execution:
 ```yaml
 settings:
   security:
-    elevated: true  # Requires explicit user approval
+    elevated: true # Requires explicit user approval
 ```
 
 **Elevated mode requirements:**
+
 1. User must explicitly approve via chat confirmation
 2. Workflow definition must declare `elevated: true`
 3. Audit log entry created with user approval timestamp
@@ -161,11 +166,11 @@ settings:
 
 ### 3.1 Workspace Modes
 
-| Mode | Description | Default | Use Case |
-|------|-------------|---------|----------|
-| `in-place` | Work directly in target repo | Yes | Quick fixes, trusted workflows |
-| `worktree` | Create git worktree | No | Parallel work, isolation |
-| `copy` | Full repo copy | No | Maximum isolation, untrusted |
+| Mode       | Description                  | Default | Use Case                       |
+| ---------- | ---------------------------- | ------- | ------------------------------ |
+| `in-place` | Work directly in target repo | Yes     | Quick fixes, trusted workflows |
+| `worktree` | Create git worktree          | No      | Parallel work, isolation       |
+| `copy`     | Full repo copy               | No      | Maximum isolation, untrusted   |
 
 ### 3.2 Mode: In-Place (Default)
 
@@ -176,12 +181,14 @@ workspace:
 ```
 
 **Behavior:**
+
 - Agents work directly in the target repository
 - No branch switching (stays on current branch)
 - Changes are local until explicitly committed/pushed
 - **Requires clean working tree** (no uncommitted changes)
 
 **Pre-flight checks:**
+
 ```typescript
 interface InPlaceValidationOptions {
   /** Fail if untracked files exist in source dirs (default: false) */
@@ -192,26 +199,28 @@ interface InPlaceValidationOptions {
 
 async function validateInPlaceWorkspace(
   repoPath: string,
-  options: InPlaceValidationOptions = {}
+  options: InPlaceValidationOptions = {},
 ): Promise<ValidationResult> {
   const errors: string[] = [];
   const warnings: string[] = [];
   const { failOnUntracked = false, untrackedCheckPaths = ["src/"] } = options;
 
   // 1. Must be a git repository
-  if (!await isGitRepo(repoPath)) {
+  if (!(await isGitRepo(repoPath))) {
     errors.push("Target path is not a git repository");
   }
 
   // 2. Working tree must be clean (modified/staged = hard block)
   const status = await git.status(repoPath);
   if (status.modified.length > 0 || status.staged.length > 0) {
-    errors.push(`Working tree has uncommitted changes: ${status.modified.length} modified, ${status.staged.length} staged`);
+    errors.push(
+      `Working tree has uncommitted changes: ${status.modified.length} modified, ${status.staged.length} staged`,
+    );
   }
 
   // 3. Untracked files check (configurable: warn or fail)
-  const untracked = status.untracked.filter(f =>
-    untrackedCheckPaths.some(p => f.startsWith(p))
+  const untracked = status.untracked.filter((f) =>
+    untrackedCheckPaths.some((p) => f.startsWith(p)),
   );
   if (untracked.length > 0) {
     const msg = `Untracked source files found: ${untracked.slice(0, 5).join(", ")}${untracked.length > 5 ? "..." : ""}`;
@@ -227,12 +236,13 @@ async function validateInPlaceWorkspace(
 ```
 
 **Configuration:**
+
 ```yaml
 workspace:
   mode: in-place
   targetRepo: ~/projects/my-app
   validation:
-    failOnUntracked: false  # Default: warn only, don't block
+    failOnUntracked: false # Default: warn only, don't block
     untrackedCheckPaths: ["src/", "lib/"]
 ```
 
@@ -249,6 +259,7 @@ workspace:
 ```
 
 **User Confirmation Gate:**
+
 ```
 Worktree mode requested. This will:
   - Create a new git worktree at ~/.clawdbot/workflows/{runId}/workspace
@@ -259,6 +270,7 @@ Proceed? [y/N]
 ```
 
 **Behavior:**
+
 - **Requires explicit user confirmation** (cannot be auto-approved)
 - Creates a new git worktree at `~/.clawdbot/workflows/{runId}/workspace`
 - Creates a new branch from `baseBranch`
@@ -266,6 +278,7 @@ Proceed? [y/N]
 - Cleanup removes worktree on workflow completion (also requires confirmation)
 
 **Creation:**
+
 ```bash
 # Create worktree with new branch
 git -C ${targetRepo} worktree add \
@@ -275,6 +288,7 @@ git -C ${targetRepo} worktree add \
 ```
 
 **Cleanup:**
+
 ```bash
 # Remove worktree
 git -C ${targetRepo} worktree remove ~/.clawdbot/workflows/${runId}/workspace
@@ -289,10 +303,11 @@ git -C ${targetRepo} branch -D workflow/${runId}
 workspace:
   mode: copy
   targetRepo: ~/projects/my-app
-  shallow: true  # Use shallow clone
+  shallow: true # Use shallow clone
 ```
 
 **Behavior:**
+
 - Full copy of repository to workflow directory
 - No connection to original repo
 - Changes must be manually transferred back
@@ -300,13 +315,14 @@ workspace:
 
 ### 3.5 Dirty Tree Handling
 
-| Mode | Dirty Tree Behavior |
-|------|---------------------|
+| Mode       | Dirty Tree Behavior                         |
+| ---------- | ------------------------------------------- |
 | `in-place` | **Block workflow start** with error message |
-| `worktree` | **Allow** (worktree is isolated) |
-| `copy` | **Allow** (copy is isolated) |
+| `worktree` | **Allow** (worktree is isolated)            |
+| `copy`     | **Allow** (copy is isolated)                |
 
 **Error message for in-place:**
+
 ```
 Cannot start workflow: working tree has uncommitted changes.
 
@@ -323,12 +339,14 @@ Modified files:
 ### 3.6 Branch Strategy
 
 **Worktree mode branch naming:**
+
 ```
 workflow/{runId}           # Main workflow branch
 workflow/{runId}/phase-{n} # Optional: branch per phase
 ```
 
 **Merge strategy:**
+
 - Workflow never merges automatically
 - On completion, user receives instructions:
   ```
@@ -366,6 +384,7 @@ Co-Authored-By: Codex <noreply@openai.com>
 ```
 
 **Example:**
+
 ```
 workflow(execution): implement todo CRUD endpoints
 
@@ -382,25 +401,25 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 async function safeCommit(
   workspacePath: string,
   files: string[],
-  message: string
+  message: string,
 ): Promise<CommitResult> {
   // 1. Check for unrelated changes
   const status = await git.status(workspacePath);
-  const unrelatedChanges = status.modified.filter(f => !files.includes(f));
+  const unrelatedChanges = status.modified.filter((f) => !files.includes(f));
 
   if (unrelatedChanges.length > 0) {
     return {
       success: false,
       error: `Refusing to commit: ${unrelatedChanges.length} unrelated files modified`,
-      unrelatedFiles: unrelatedChanges
+      unrelatedFiles: unrelatedChanges,
     };
   }
 
   // 2. Commit via scripts/committer (per repo rules - no manual git add/commit)
   // scripts/committer handles staging and commit atomically
   const result = await exec(
-    `scripts/committer "${escapeMessage(message)}" ${files.map(f => `"${f}"`).join(" ")}`,
-    { cwd: workspacePath }
+    `scripts/committer "${escapeMessage(message)}" ${files.map((f) => `"${f}"`).join(" ")}`,
+    { cwd: workspacePath },
   );
 
   return { success: true, sha: result.sha };
@@ -412,6 +431,7 @@ async function safeCommit(
 **Automatic push: NEVER**
 
 User must explicitly push after workflow completion:
+
 ```bash
 # Workflow provides instructions
 cd ~/projects/my-app
@@ -427,15 +447,15 @@ gh pr create --head workflow/wf_abc123 --title "..."
 
 ### 5.1 Storage Limits
 
-| Resource | Default Limit | Configurable |
-|----------|---------------|--------------|
-| Max concurrent workflows | 5 | Yes |
-| Max completed workflows retained | 20 | Yes |
-| Max disk usage per workflow | 500 MB | Yes |
-| Max total workflow storage | 5 GB | Yes |
-| Log retention (completed) | 7 days | Yes |
-| Log retention (failed) | 30 days | Yes |
-| Artifact retention | 30 days | Yes |
+| Resource                         | Default Limit | Configurable |
+| -------------------------------- | ------------- | ------------ |
+| Max concurrent workflows         | 5             | Yes          |
+| Max completed workflows retained | 20            | Yes          |
+| Max disk usage per workflow      | 500 MB        | Yes          |
+| Max total workflow storage       | 5 GB          | Yes          |
+| Log retention (completed)        | 7 days        | Yes          |
+| Log retention (failed)           | 30 days       | Yes          |
+| Artifact retention               | 30 days       | Yes          |
 
 ### 5.2 Configuration
 
@@ -481,6 +501,7 @@ interface CleanupPolicy {
 ```
 
 **Cleanup order (when over limit):**
+
 1. Remove oldest completed workflows first
 2. Remove failed workflows older than retention period
 3. Compress logs older than 3 days
@@ -489,11 +510,13 @@ interface CleanupPolicy {
 ### 5.4 PII & Sensitive Data
 
 **Log redaction:**
+
 - All logs pass through `redactSecrets()` before persistence
 - File paths are normalized (no full home directory paths)
 - User identifiers are hashed in metrics
 
 **Artifact redaction:**
+
 - Scan artifacts for secret patterns before storage
 - Block storage of known sensitive file types:
   - `.env`, `.env.*`
@@ -502,14 +525,13 @@ interface CleanupPolicy {
   - `id_rsa`, `id_ed25519`
 
 **Redaction audit log:**
+
 ```json
 {
   "timestamp": "2025-01-29T12:00:00Z",
   "workflowId": "wf_abc123",
   "phase": "execution",
-  "redactions": [
-    { "pattern": "API_KEY", "count": 2, "files": ["logs/agent.log"] }
-  ]
+  "redactions": [{ "pattern": "API_KEY", "count": 2, "files": ["logs/agent.log"] }]
 }
 ```
 
@@ -569,6 +591,7 @@ moltbot workflow clean --enforce-quota
 **Location:** `src/workflows/orchestrator.ts`
 
 **Responsibilities:**
+
 - Parse workflow definitions
 - Manage phase transitions
 - Track workflow state
@@ -576,6 +599,7 @@ moltbot workflow clean --enforce-quota
 - Enforce timeouts and retries
 
 **Interface:**
+
 ```typescript
 interface WorkflowOrchestrator {
   // Lifecycle
@@ -599,6 +623,7 @@ interface WorkflowOrchestrator {
 **Location:** `src/workflows/engines/planner.ts`
 
 **Responsibilities:**
+
 - Generate project plan from high-level task
 - Decompose into atomic tasks
 - Estimate complexity and dependencies
@@ -607,6 +632,7 @@ interface WorkflowOrchestrator {
 **Agents Used:** Claude (primary), Codex (review)
 
 **Output Artifacts:**
+
 ```
 artifacts/
 ├── plan.json           # High-level project plan
@@ -619,6 +645,7 @@ artifacts/
 **Location:** `src/workflows/engines/executor.ts`
 
 **Responsibilities:**
+
 - Execute tasks from `tasks.json` in dependency order
 - Run tests after each task
 - Update task status
@@ -627,6 +654,7 @@ artifacts/
 **Agents Used:** Claude Code (primary)
 
 **Output Artifacts:**
+
 ```
 artifacts/
 ├── tasks.json          # Updated with status
@@ -641,6 +669,7 @@ artifacts/
 **Location:** `src/workflows/engines/reviewer.ts`
 
 **Responsibilities:**
+
 - Architectural review
 - Code quality review
 - Test coverage analysis
@@ -650,6 +679,7 @@ artifacts/
 **Agents Used:** Codex (primary)
 
 **Output Artifacts:**
+
 ```
 artifacts/
 ├── review.json         # Structured review results
@@ -662,12 +692,14 @@ artifacts/
 **Location:** `src/workflows/artifacts/`
 
 **Responsibilities:**
+
 - Persist workflow artifacts to filesystem
 - Version artifacts per phase
 - Enable artifact sharing between agents
 - Support artifact retrieval for handoffs
 
 **Directory Structure:**
+
 ```
 ~/.clawdbot/workflows/
 └── {runId}/
@@ -970,7 +1002,7 @@ phases:
       - plan.json
       - tasks.json
     settings:
-      timeoutMs: 300000  # 5 min
+      timeoutMs: 300000 # 5 min
       retries: 1
 
   - id: plan-review
@@ -985,7 +1017,7 @@ phases:
     outputArtifacts:
       - plan-review.json
     settings:
-      timeoutMs: 180000  # 3 min
+      timeoutMs: 180000 # 3 min
       retries: 1
     transitions:
       - condition: "$.approved == false"
@@ -1000,10 +1032,10 @@ phases:
     inputArtifacts:
       - tasks.json
     outputArtifacts:
-      - tasks.json  # updated
+      - tasks.json # updated
       - execution-report.md
     settings:
-      timeoutMs: 1800000  # 30 min
+      timeoutMs: 1800000 # 30 min
       retries: 2
 
   - id: code-review
@@ -1019,7 +1051,7 @@ phases:
       - review.json
       - recommendations.md
     settings:
-      timeoutMs: 300000  # 5 min
+      timeoutMs: 300000 # 5 min
       retries: 1
     transitions:
       - condition: "$.issues[?(@.severity=='critical')].length > 0"
@@ -1036,11 +1068,11 @@ phases:
       - final-report.md
       - changelog.md
     settings:
-      timeoutMs: 120000  # 2 min
+      timeoutMs: 120000 # 2 min
       retries: 1
 
 settings:
-  maxDurationMs: 3600000  # 1 hour
+  maxDurationMs: 3600000 # 1 hour
   maxReviewIterations: 3
   autoCommit: true
   notifyOnPhaseComplete: true
@@ -1098,6 +1130,7 @@ handoff/
 ```
 
 **context.json:**
+
 ```json
 {
   "workflowId": "wf_abc123",
@@ -1109,11 +1142,7 @@ handoff/
     "language": "typescript",
     "framework": "express"
   },
-  "relevantFiles": [
-    "src/routes/todos.ts",
-    "src/models/todo.ts",
-    "tests/todos.test.ts"
-  ],
+  "relevantFiles": ["src/routes/todos.ts", "src/models/todo.ts", "tests/todos.test.ts"],
   "changesInScope": {
     "added": ["src/routes/todos.ts"],
     "modified": ["src/models/todo.ts"],
@@ -1123,17 +1152,21 @@ handoff/
 ```
 
 **instructions.md:**
+
 ```markdown
 # Code Review Instructions
 
 ## Your Role
+
 You are the code reviewer (Codex). Review the changes made by the developer (Claude).
 
 ## Changes to Review
+
 - Added: `src/routes/todos.ts` - New REST endpoints
 - Modified: `src/models/todo.ts` - Added validation
 
 ## Review Checklist
+
 1. Architecture alignment with plan.json
 2. Code quality and best practices
 3. Test coverage adequacy
@@ -1141,6 +1174,7 @@ You are the code reviewer (Codex). Review the changes made by the developer (Cla
 5. Documentation completeness
 
 ## Output Requirements
+
 Produce `review.json` following the ReviewResult schema.
 If critical issues found, set `approved: false`.
 ```
@@ -1148,6 +1182,7 @@ If critical issues found, set `approved: false`.
 ### 6.2 Agent Invocation
 
 **Claude Code:**
+
 ```bash
 bash pty:true \
   workdir:$WORKSPACE \
@@ -1157,6 +1192,7 @@ bash pty:true \
 ```
 
 **Codex:**
+
 ```bash
 bash pty:true \
   workdir:$WORKSPACE \
@@ -1173,12 +1209,12 @@ After each agent completes:
 ```typescript
 async function validatePhaseOutput(
   phase: PhaseDefinition,
-  artifactPath: string
+  artifactPath: string,
 ): Promise<ValidationResult> {
   const results: ValidationResult = {
     valid: true,
     errors: [],
-    warnings: []
+    warnings: [],
   };
 
   // 1. Check required artifacts exist
@@ -1204,7 +1240,7 @@ async function validatePhaseOutput(
   if (phase.settings.proceedCondition) {
     const conditionMet = evaluateCondition(
       phase.settings.proceedCondition,
-      await collectArtifacts(artifactPath)
+      await collectArtifacts(artifactPath),
     );
     if (!conditionMet) {
       results.valid = false;
@@ -1222,15 +1258,15 @@ async function validatePhaseOutput(
 
 ### 7.1 Error Categories
 
-| Category | Handling | Retry |
-|----------|----------|-------|
-| Agent timeout | Kill process, retry phase | Yes (configurable) |
-| Agent crash | Log output, retry phase | Yes (configurable) |
-| Validation failure | Log errors, retry phase | Yes (configurable) |
-| Missing artifact | Block transition, notify user | No |
-| Critical review issue | Loop back to execution | Yes (max iterations) |
-| Max iterations exceeded | Pause workflow, notify user | No |
-| Workflow timeout | Cancel workflow, save state | No |
+| Category                | Handling                      | Retry                |
+| ----------------------- | ----------------------------- | -------------------- |
+| Agent timeout           | Kill process, retry phase     | Yes (configurable)   |
+| Agent crash             | Log output, retry phase       | Yes (configurable)   |
+| Validation failure      | Log errors, retry phase       | Yes (configurable)   |
+| Missing artifact        | Block transition, notify user | No                   |
+| Critical review issue   | Loop back to execution        | Yes (max iterations) |
+| Max iterations exceeded | Pause workflow, notify user   | No                   |
+| Workflow timeout        | Cancel workflow, save state   | No                   |
 
 ### 7.2 Recovery Strategies
 
@@ -1268,7 +1304,7 @@ const persistenceEvents = [
   "artifact:created",
   "iteration:started",
   "workflow:paused",
-  "workflow:resumed"
+  "workflow:resumed",
 ];
 ```
 
@@ -1312,11 +1348,11 @@ const persistenceEvents = [
 
 ### 8.2 Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MOLTBOT_WORKFLOW_STORAGE` | Workflow storage path | `~/.clawdbot/workflows` |
-| `MOLTBOT_WORKFLOW_TIMEOUT` | Max workflow duration (ms) | `3600000` |
-| `MOLTBOT_WORKFLOW_DEBUG` | Enable debug logging | `false` |
+| Variable                   | Description                | Default                 |
+| -------------------------- | -------------------------- | ----------------------- |
+| `MOLTBOT_WORKFLOW_STORAGE` | Workflow storage path      | `~/.clawdbot/workflows` |
+| `MOLTBOT_WORKFLOW_TIMEOUT` | Max workflow duration (ms) | `3600000`               |
+| `MOLTBOT_WORKFLOW_DEBUG`   | Enable debug logging       | `false`                 |
 
 ---
 
@@ -1450,28 +1486,28 @@ skills/multi-agent-workflow/
 
 ### 11.1 Functional Requirements
 
-| ID | Requirement | Priority |
-|----|-------------|----------|
-| F1 | Start workflow from chat command | Must |
-| F2 | Execute planning phase with Claude | Must |
-| F3 | Execute review phase with Codex | Must |
-| F4 | Automatic phase transitions | Must |
-| F5 | Review loop iteration | Must |
-| F6 | Artifact persistence | Must |
-| F7 | Workflow pause/resume | Should |
-| F8 | Progress notifications | Should |
-| F9 | Custom workflow definitions | Could |
-| F10 | Parallel task execution | Could |
+| ID  | Requirement                        | Priority |
+| --- | ---------------------------------- | -------- |
+| F1  | Start workflow from chat command   | Must     |
+| F2  | Execute planning phase with Claude | Must     |
+| F3  | Execute review phase with Codex    | Must     |
+| F4  | Automatic phase transitions        | Must     |
+| F5  | Review loop iteration              | Must     |
+| F6  | Artifact persistence               | Must     |
+| F7  | Workflow pause/resume              | Should   |
+| F8  | Progress notifications             | Should   |
+| F9  | Custom workflow definitions        | Could    |
+| F10 | Parallel task execution            | Could    |
 
 ### 11.2 Non-Functional Requirements
 
-| ID | Requirement | Target |
-|----|-------------|--------|
-| NF1 | Phase transition overhead | < 500ms (orchestration only; excludes agent startup/execution) |
-| NF2 | State persistence reliability | 99.9% |
-| NF3 | Workflow recovery after crash | Full state recovery |
-| NF4 | Max concurrent workflows | 5 |
-| NF5 | Artifact storage efficiency | Dedup shared files |
+| ID  | Requirement                   | Target                                                         |
+| --- | ----------------------------- | -------------------------------------------------------------- |
+| NF1 | Phase transition overhead     | < 500ms (orchestration only; excludes agent startup/execution) |
+| NF2 | State persistence reliability | 99.9%                                                          |
+| NF3 | Workflow recovery after crash | Full state recovery                                            |
+| NF4 | Max concurrent workflows      | 5                                                              |
+| NF5 | Artifact storage efficiency   | Dedup shared files                                             |
 
 ### 11.3 Test Cases
 
@@ -1517,30 +1553,35 @@ describe("Multi-Agent Workflow", () => {
 ## 12. Implementation Phases
 
 ### Phase 1: Core Infrastructure (Week 1-2)
+
 - [ ] Workflow orchestrator skeleton
 - [ ] State persistence
 - [ ] Artifact store
 - [ ] Basic CLI commands
 
 ### Phase 2: Agent Integration (Week 2-3)
+
 - [ ] Claude runner (PTY + background)
 - [ ] Codex runner (PTY + background)
 - [ ] Handoff protocol
 - [ ] Output validation
 
 ### Phase 3: Engines (Week 3-4)
+
 - [ ] Planner engine
 - [ ] Executor engine
 - [ ] Reviewer engine
 - [ ] Phase transitions
 
 ### Phase 4: Polish (Week 4-5)
+
 - [ ] Chat interface
 - [ ] Progress notifications
 - [ ] Error recovery
 - [ ] Documentation
 
 ### Phase 5: Testing & Iteration (Week 5-6)
+
 - [ ] Integration tests
 - [ ] Real-world workflow testing
 - [ ] Performance optimization

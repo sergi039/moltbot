@@ -12,6 +12,7 @@ Orchestrate complex development tasks using a two-LLM architecture with automate
 ## Overview
 
 This skill enables multi-phase workflows where:
+
 1. **Planner LLM** creates implementation plans and task breakdowns
 2. **Executor LLM** implements tasks based on the plan
 3. **Reviewer LLM** validates changes and provides feedback
@@ -21,11 +22,13 @@ Each phase produces structured artifacts and supports automatic iteration based 
 ## Usage
 
 ### Explicit Call
+
 ```
 Use skill multi-agent-workflow: plan + implement + review feature X
 ```
 
 ### Short Form
+
 ```
 multi-agent-workflow: implement X with review
 ```
@@ -33,6 +36,7 @@ multi-agent-workflow: implement X with review
 ### Aliases
 
 You can use shorter aliases:
+
 ```
 /workflow build a REST API
 /wf add user authentication
@@ -42,16 +46,19 @@ You can use shorter aliases:
 ### Examples
 
 **New feature:**
+
 ```
 multi-agent-workflow: add user authentication with JWT tokens
 ```
 
 **Bug fix with review:**
+
 ```
 multi-agent-workflow: fix memory leak in cache module and review
 ```
 
 **Refactoring:**
+
 ```
 multi-agent-workflow: refactor database layer to use connection pooling
 ```
@@ -63,6 +70,7 @@ When enabled, workflows can be triggered from natural language without explicit 
 ### Enable Intent Routing
 
 Add to `~/.openclaw/openclaw.json`:
+
 ```json
 {
   "workflows": {
@@ -78,17 +86,20 @@ Add to `~/.openclaw/openclaw.json`:
 ### Supported Patterns
 
 **Dev-cycle patterns** (planning + implementation + review):
+
 - "plan and implement user authentication"
 - "implement file upload and review"
 - "build a login form with review"
 - "start a dev-cycle for refactoring the API"
 
 **Review-only patterns**:
+
 - "review the code changes"
 - "review this PR"
 - "do a code review"
 
 **Plan-only patterns**:
+
 - "just plan the refactoring"
 - "create a plan for the new feature"
 - "generate an implementation plan"
@@ -114,6 +125,7 @@ Reply with `/workflow start` to run, or continue with your message.
 ## Modes
 
 ### Stub Mode (Default)
+
 - No API keys required
 - Tests workflow mechanics without real LLM calls
 - Fast execution for validation
@@ -124,6 +136,7 @@ moltbot workflow start --type dev-cycle --task "Add feature X" --repo .
 ```
 
 ### Live Mode
+
 - Requires `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
 - Real LLM execution with policy enforcement
 - Approval prompts for sensitive operations
@@ -137,14 +150,15 @@ moltbot workflow start --type dev-cycle --task "Add feature X" --repo . --live
 
 Workflows enforce these limits to prevent runaway token consumption:
 
-| Limit | Default | Description |
-|-------|---------|-------------|
-| `maxDurationMs` | 3600000 (1h) | Maximum total workflow duration |
-| `maxReviewIterations` | 3 | Maximum plan/review cycles |
-| `maxTasks` | 50 | Maximum tasks in tasks.json |
-| `maxAgentRuns` | 30 | Maximum agent invocations (live mode) |
+| Limit                 | Default      | Description                           |
+| --------------------- | ------------ | ------------------------------------- |
+| `maxDurationMs`       | 3600000 (1h) | Maximum total workflow duration       |
+| `maxReviewIterations` | 3            | Maximum plan/review cycles            |
+| `maxTasks`            | 50           | Maximum tasks in tasks.json           |
+| `maxAgentRuns`        | 30           | Maximum agent invocations (live mode) |
 
 Override in `~/.openclaw/openclaw.json`:
+
 ```json
 {
   "workflows": {
@@ -160,9 +174,11 @@ Override in `~/.openclaw/openclaw.json`:
 ## Workflow Types
 
 ### dev-cycle (Default)
+
 Full development cycle: planning → execution → review → finalize
 
 Phases:
+
 1. `planning` - Create plan.md and tasks.json
 2. `plan-review` - Validate plan structure
 3. `execution` - Implement tasks
@@ -170,6 +186,7 @@ Phases:
 5. `finalize` - Generate final report
 
 ### review-only
+
 Code review only, no implementation.
 
 ## Commands
@@ -198,6 +215,7 @@ moltbot workflow list
 ## Artifacts
 
 Each workflow run produces:
+
 - `plan.md` - Implementation plan
 - `tasks.json` - Structured task list
 - `execution-report.json` - Execution summary
@@ -209,6 +227,7 @@ Artifacts are stored in: `~/.clawdbot/workflows/<run-id>/`
 ## Policy & Approvals
 
 Live mode enforces security policies:
+
 - Sandboxed execution by default
 - Approval prompts for destructive operations
 - Configurable allowed/blocked command patterns

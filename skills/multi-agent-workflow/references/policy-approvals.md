@@ -3,6 +3,7 @@
 ## Overview
 
 Live mode workflows enforce security policies to protect against unintended operations. The policy engine evaluates each action and can:
+
 - **Allow** - Action proceeds immediately
 - **Deny** - Action is blocked
 - **Prompt** - User approval required
@@ -36,18 +37,19 @@ Live mode workflows enforce security policies to protect against unintended oper
 
 ## Action Types
 
-| Action | Description | Example |
-|--------|-------------|---------|
-| `file_read` | Read file contents | `cat src/index.ts` |
-| `file_write` | Write/modify files | `echo > file.ts` |
-| `file_delete` | Delete files | `rm -rf dist/` |
-| `bash_execute` | Run shell commands | `npm install` |
-| `network_request` | HTTP requests | `curl api.example.com` |
-| `agent_spawn` | Spawn sub-agent | Starting new agent |
+| Action            | Description        | Example                |
+| ----------------- | ------------------ | ---------------------- |
+| `file_read`       | Read file contents | `cat src/index.ts`     |
+| `file_write`      | Write/modify files | `echo > file.ts`       |
+| `file_delete`     | Delete files       | `rm -rf dist/`         |
+| `bash_execute`    | Run shell commands | `npm install`          |
+| `network_request` | HTTP requests      | `curl api.example.com` |
+| `agent_spawn`     | Spawn sub-agent    | Starting new agent     |
 
 ## Default Blocked Patterns
 
 These commands are blocked by default:
+
 - `rm -rf /` - Destructive root delete
 - `curl | bash` - Remote code execution
 - `chmod 777` - Insecure permissions
@@ -58,6 +60,7 @@ These commands are blocked by default:
 When an action requires approval:
 
 1. **Prompt Displayed**
+
    ```
    ┌─────────────────────────────────────┐
    │  Approval Required                  │
@@ -104,13 +107,14 @@ Approvals are logged to `approvals.jsonl`:
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MOLTBOT_SMOKE_TIMEOUT` | Approval timeout (ms) | 60000 |
+| Variable                | Description           | Default |
+| ----------------------- | --------------------- | ------- |
+| `MOLTBOT_SMOKE_TIMEOUT` | Approval timeout (ms) | 60000   |
 
 ### Config File
 
 `~/.openclaw/openclaw.json`:
+
 ```json
 {
   "workflows": {
@@ -136,11 +140,13 @@ cat ~/.clawdbot/workflows/<run-id>/approvals.jsonl
 ## Security Modes
 
 ### Sandboxed (Default)
+
 - Filesystem restricted to workspace
 - Network access controlled
 - Sensitive operations require approval
 
 ### Elevated
+
 - Broader filesystem access
 - Requires explicit `--elevated` flag
 - Still respects blocked patterns

@@ -3,6 +3,7 @@
 ## Storage Location
 
 All artifacts are stored in:
+
 ```
 ~/.clawdbot/workflows/<run-id>/
 ├── run.json              # Workflow state
@@ -36,16 +37,20 @@ Implementation plan in markdown format.
 # Implementation Plan
 
 ## Overview
+
 Brief description of the approach.
 
 ## Tasks
+
 1. Task 1 - Description
 2. Task 2 - Description
 
 ## Dependencies
+
 - Task 2 depends on Task 1
 
 ## Risks
+
 - Identified risks and mitigations
 ```
 
@@ -69,10 +74,7 @@ Structured task list following TaskList schema.
       "complexity": 3,
       "status": "pending",
       "dependsOn": [],
-      "acceptanceCriteria": [
-        "Validates JWT tokens",
-        "Returns 401 for invalid tokens"
-      ],
+      "acceptanceCriteria": ["Validates JWT tokens", "Returns 401 for invalid tokens"],
       "targetFiles": ["src/middleware/auth.ts"]
     }
   ],
@@ -177,6 +179,7 @@ cat ~/.clawdbot/workflows/<run-id>/phases/03-review/artifacts/review.json | jq
 ## Artifact Retention
 
 Configured via `workflows.retention`:
+
 - `artifactRetentionDays`: 30 (default)
 - `logRetentionDays`: 14 (default)
 - `failedLogRetentionDays`: 30 (default)

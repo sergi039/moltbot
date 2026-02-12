@@ -5,6 +5,7 @@ This runbook covers day-to-day operations, monitoring, incident response, and ma
 ---
 
 **Related docs:**
+
 - [Release Plan](/DEPLOYMENT#release-plan-dev--prod) — production deployment steps
 - [Release Notes](/memory/RELEASE-NOTES) — changelog, migration guide
 
@@ -27,12 +28,12 @@ This runbook covers day-to-day operations, monitoring, incident response, and ma
 
 These configuration keys are **protected by guardrails** and must never be lost during config writes. If a config update would remove these keys, the guardrail automatically preserves them.
 
-| Key | Purpose | Required For |
-|-----|---------|--------------|
-| `gateway.mode` | Gateway operation mode | Gateway startup (must be `"local"`) |
-| `gateway.auth.token` | Authentication token | Gateway web UI access |
-| `channels.telegram.enabled` | Telegram channel toggle | Telegram bot operation |
-| `env.TELEGRAM_BOT_TOKEN` | Telegram bot API token | Telegram bot authentication |
+| Key                         | Purpose                 | Required For                        |
+| --------------------------- | ----------------------- | ----------------------------------- |
+| `gateway.mode`              | Gateway operation mode  | Gateway startup (must be `"local"`) |
+| `gateway.auth.token`        | Authentication token    | Gateway web UI access               |
+| `channels.telegram.enabled` | Telegram channel toggle | Telegram bot operation              |
+| `env.TELEGRAM_BOT_TOKEN`    | Telegram bot API token  | Telegram bot authentication         |
 
 ### Verification
 
@@ -109,12 +110,12 @@ pnpm openclaw config set channels.telegram.enabled true
 
 ### Key Paths
 
-| Path | Description |
-|------|-------------|
-| `~/.clawdbot/memory/facts.db` | SQLite database |
-| `~/.clawdbot/memory/facts.db-wal` | WAL journal |
-| `~/.clawdbot/memory/facts.db-shm` | Shared memory |
-| `~/.clawdbot/backups/` | Recommended backup location |
+| Path                              | Description                 |
+| --------------------------------- | --------------------------- |
+| `~/.clawdbot/memory/facts.db`     | SQLite database             |
+| `~/.clawdbot/memory/facts.db-wal` | WAL journal                 |
+| `~/.clawdbot/memory/facts.db-shm` | Shared memory               |
+| `~/.clawdbot/backups/`            | Recommended backup location |
 
 ### Configuration
 
@@ -165,21 +166,21 @@ moltbot memory facts stats
 
 ### Health Status Levels
 
-| Status | Meaning | Action |
-|--------|---------|--------|
-| `ok` | All metrics within thresholds | None |
-| `warning` | One or more soft thresholds exceeded | Review alerts |
-| `critical` | Hard threshold exceeded or system error | Immediate action |
-| `disabled` | Memory system disabled in config | Expected if intentional |
+| Status     | Meaning                                 | Action                  |
+| ---------- | --------------------------------------- | ----------------------- |
+| `ok`       | All metrics within thresholds           | None                    |
+| `warning`  | One or more soft thresholds exceeded    | Review alerts           |
+| `critical` | Hard threshold exceeded or system error | Immediate action        |
+| `disabled` | Memory system disabled in config        | Expected if intentional |
 
 ### Key Metrics
 
-| Metric | Warning Threshold | Critical Threshold |
-|--------|-------------------|-------------------|
-| `dbSizeMb` | 80% of maxDbSizeMb | 100% of maxDbSizeMb |
-| `extractionErrors` | 5/day | 10/day |
-| `staleDays` | 3 days | 7 days |
-| `alertCount` | 1+ | 5+ |
+| Metric             | Warning Threshold  | Critical Threshold  |
+| ------------------ | ------------------ | ------------------- |
+| `dbSizeMb`         | 80% of maxDbSizeMb | 100% of maxDbSizeMb |
+| `extractionErrors` | 5/day              | 10/day              |
+| `staleDays`        | 3 days             | 7 days              |
+| `alertCount`       | 1+                 | 5+                  |
 
 ### Monitoring Integration
 
@@ -191,6 +192,7 @@ Health events are logged with structured data:
 ```
 
 Filter logs:
+
 ```bash
 grep "memory.health\|memory.alert" /var/log/openclaw/gateway.log
 ```
@@ -202,12 +204,14 @@ grep "memory.health\|memory.alert" /var/log/openclaw/gateway.log
 ### Morning Checklist
 
 1. **Health check**
+
    ```bash
    moltbot memory facts health --check
    echo $?  # 0 = ok, 1 = warning/critical
    ```
 
 2. **Review alerts**
+
    ```bash
    moltbot memory facts alerts --json | jq '.alerts | length'
    ```
@@ -222,17 +226,20 @@ grep "memory.health\|memory.alert" /var/log/openclaw/gateway.log
 **Auto-updates are DISABLED in production.** The gateway runs from `release/memory-v1` only.
 
 Update chain:
+
 ```
 upstream/main → main (mirror) → dev → release/memory-v1 → prod
 ```
 
 Rules:
+
 - **NO auto-pull** in prod repo
 - Daily cron only does `git fetch` + notification (no apply)
 - All updates require manual merge into `release/memory-v1`
 - Gateway preflight blocks startup if branch != `release/memory-v1`
 
 Before any cron or check, note the SHA:
+
 ```bash
 cd ~/openclaw-prod
 SHA_BEFORE=$(git rev-parse HEAD)
@@ -246,11 +253,13 @@ See: [DEPLOYMENT.md#update-policy-critical](/DEPLOYMENT#update-policy-critical)
 ### Weekly Maintenance
 
 1. **Run cleanup** (if not automated)
+
    ```bash
    moltbot memory facts cleanup --force
    ```
 
 2. **Vacuum database** (reclaim space)
+
    ```bash
    moltbot memory facts repair --vacuum
    ```
@@ -263,11 +272,13 @@ See: [DEPLOYMENT.md#update-policy-critical](/DEPLOYMENT#update-policy-critical)
 ### Monthly Maintenance
 
 1. **Full integrity check**
+
    ```bash
    moltbot memory facts repair --check
    ```
 
 2. **Review top facts** (data quality)
+
    ```bash
    moltbot memory facts top --limit 50 --json | jq '.items[].content'
    ```
@@ -286,17 +297,21 @@ See: [DEPLOYMENT.md#update-policy-critical](/DEPLOYMENT#update-policy-critical)
 **Symptom:** Database approaching size limit.
 
 **Response:**
+
 1. Check current size:
+
    ```bash
    moltbot memory facts stats --json | jq '.dbSizeMb'
    ```
 
 2. Run cleanup:
+
    ```bash
    moltbot memory facts cleanup --force --vacuum
    ```
 
 3. If still high, review retention policy:
+
    ```bash
    moltbot config get factsMemory.retention
    ```
@@ -308,7 +323,9 @@ See: [DEPLOYMENT.md#update-policy-critical](/DEPLOYMENT#update-policy-critical)
 **Symptom:** Too many extraction failures.
 
 **Response:**
+
 1. Check recent errors:
+
    ```bash
    grep "extraction.*error\|extractor.*fail" /var/log/openclaw/gateway.log | tail -20
    ```
@@ -319,6 +336,7 @@ See: [DEPLOYMENT.md#update-policy-critical](/DEPLOYMENT#update-policy-critical)
    - Network issues
 
 3. Verify LLM connectivity:
+
    ```bash
    moltbot models status
    ```
@@ -330,17 +348,21 @@ See: [DEPLOYMENT.md#update-policy-critical](/DEPLOYMENT#update-policy-critical)
 **Symptom:** No extractions for N days.
 
 **Response:**
+
 1. Check if gateway is running:
+
    ```bash
    pgrep -f "openclaw gateway"
    ```
 
 2. Check scheduler status:
+
    ```bash
    grep "scheduler" /var/log/openclaw/gateway.log | tail -10
    ```
 
 3. Manually trigger extraction:
+
    ```bash
    # Extraction happens automatically on messages
    # If no messages, this is expected
@@ -353,17 +375,21 @@ See: [DEPLOYMENT.md#update-policy-critical](/DEPLOYMENT#update-policy-critical)
 **Symptom:** Database corruption detected.
 
 **Response:**
+
 1. Stop gateway:
+
    ```bash
    pkill -f "openclaw gateway"
    ```
 
 2. Run repair:
+
    ```bash
    moltbot memory facts repair --check --reindex --vacuum
    ```
 
 3. If repair fails, restore from backup:
+
    ```bash
    moltbot memory facts import --in ~/.clawdbot/backups/facts-latest.jsonl --replace
    ```
@@ -377,6 +403,7 @@ See: [DEPLOYMENT.md#update-policy-critical](/DEPLOYMENT#update-policy-critical)
 ### Automated Backup (Cron)
 
 Add to crontab:
+
 ```bash
 # Daily backup at 3 AM
 0 3 * * * moltbot memory facts export --out ~/.clawdbot/backups/facts-$(date +\%Y\%m\%d).jsonl
@@ -401,6 +428,7 @@ moltbot memory facts export --out ~/backup-facts-only.jsonl --exclude-types pref
 ### Restore Procedures
 
 **Full restore (replace all data):**
+
 ```bash
 # Stop gateway first
 pkill -f "openclaw gateway"
@@ -415,6 +443,7 @@ moltbot memory facts repair --reindex
 ```
 
 **Merge restore (add missing):**
+
 ```bash
 # No need to stop gateway
 moltbot memory facts import --in ~/backup-facts.jsonl --merge
@@ -459,6 +488,7 @@ scripts/restore-openclaw.sh --profile default
 | Workflows | `workflows/` | Dev cycle workflows |
 
 **Automated backup:**
+
 ```bash
 # Install LaunchAgent for daily backups
 launchctl load ~/Library/LaunchAgents/com.moltbot.backup.dev.plist
@@ -470,6 +500,7 @@ launchctl load ~/Library/LaunchAgents/com.moltbot.backup.dev.plist
 **Commit:** `419135dc9`
 
 **Verified:**
+
 - Gateway startup: ✓ listening on port 18789
 - Telegram: ✓ @SergioQuesada_bot running
 - Cron jobs: ✓ 6 jobs, all status "ok"
@@ -477,6 +508,7 @@ launchctl load ~/Library/LaunchAgents/com.moltbot.backup.dev.plist
 - Critical config keys: ✓ all protected keys present
 
 **Key fixes deployed:**
+
 - pi-packages 0.51.0 (API compatibility)
 - 27 recovery tests (config guardrails verified)
 - Config protection for `gateway.mode`, `auth.token`, `TELEGRAM_BOT_TOKEN`
@@ -488,10 +520,12 @@ launchctl load ~/Library/LaunchAgents/com.moltbot.backup.dev.plist
 The macOS app is a **client**. It updates independently from the Gateway.
 
 Key points:
+
 - Updating the macOS app does **not** update or overwrite the Gateway.
 - New app features may require a newer Gateway.
 
 Operational rule:
+
 - Update Gateway from `main` (manual flow).
 
 ## macOS App Build Status (Known Issue)
@@ -499,6 +533,7 @@ Operational rule:
 Current state: macOS app rebuild may fail due to **Swift macro compatibility** in `swiftui-math`.
 
 Guidance:
+
 - Do **not** block gateway releases on macOS app rebuilds.
 - Use the latest **working** app binary (e.g. v2026.2.1).
 - Track upstream fix for Swift macro compatibility; rebuild once resolved.
@@ -509,6 +544,7 @@ Rule: **`main` must always match `upstream/main`**.
 If you need local-only features, keep them in a dedicated branch and never merge into `main`.
 
 Example:
+
 ```bash
 # Save local feature
 git branch local/reset-context <commit-sha>
@@ -518,6 +554,7 @@ git fetch upstream
 git checkout main
 git reset --hard upstream/main
 ```
+
 - Update the macOS app via official releases.
 
 ## Daily Update Alerts (Optional)
@@ -529,6 +566,7 @@ export OPENCLAW_ALERT_TARGET="15589784"  # your Telegram chat_id
 ```
 
 When set, the script will send a Telegram message on:
+
 - update failures
 - UI not responding (non‑200)
 - `openclaw status` health check failure
@@ -536,10 +574,12 @@ When set, the script will send a Telegram message on:
 ## Perplexity (web_search) Configuration
 
 Policy:
+
 - API key must live in **env**, not in `openclaw.json`.
 - JSON should only store `baseUrl` + `model`.
 
 Verify:
+
 ```bash
 pnpm openclaw config get tools.web.search.perplexity
 pnpm openclaw config get env.PERPLEXITY_API_KEY   # should be empty
@@ -547,6 +587,7 @@ echo $PERPLEXITY_API_KEY
 ```
 
 Fix:
+
 ```bash
 pnpm openclaw config unset env.PERPLEXITY_API_KEY
 export PERPLEXITY_API_KEY="pplx-..."
@@ -559,6 +600,7 @@ export PERPLEXITY_API_KEY="pplx-..."
 **Goal:** Validate full backup/restore coverage including sessions history.
 
 **Commands executed:**
+
 ```bash
 # Verify backup contains sessions
 ls ~/Backups/openclaw/default/2026-02-01/agents/dev/sessions/
@@ -568,6 +610,7 @@ scripts/restore-openclaw.sh --profile default --date 2026-02-01 --dry-run
 ```
 
 **Results:**
+
 - Backup contains `agents/*/sessions/*.jsonl` and `sessions.json`
 - Dry-run restore reports: "Restoring agents (sessions history)"
 - Memory DBs present in backup (`memory/facts.db`, `memory/main.sqlite`)
@@ -579,6 +622,7 @@ scripts/restore-openclaw.sh --profile default --date 2026-02-01 --dry-run
 ### Problem: Memory not being extracted
 
 **Diagnosis:**
+
 ```bash
 # Check if enabled
 moltbot config get factsMemory.enabled
@@ -591,6 +635,7 @@ grep "extractor\|extraction" /var/log/openclaw/gateway.log | tail -20
 ```
 
 **Solutions:**
+
 - Ensure `factsMemory.enabled: true`
 - Check LLM model is configured and accessible
 - Review `cooldownMs` (might be too high)
@@ -599,6 +644,7 @@ grep "extractor\|extraction" /var/log/openclaw/gateway.log | tail -20
 ### Problem: Search returns no results
 
 **Diagnosis:**
+
 ```bash
 # Check FTS index
 moltbot memory facts repair --check
@@ -608,6 +654,7 @@ moltbot memory facts trace "test query" --json
 ```
 
 **Solutions:**
+
 ```bash
 # Rebuild FTS index
 moltbot memory facts repair --reindex
@@ -616,6 +663,7 @@ moltbot memory facts repair --reindex
 ### Problem: Database locked errors
 
 **Diagnosis:**
+
 ```bash
 # Check for multiple processes
 lsof ~/.clawdbot/memory/facts.db
@@ -625,6 +673,7 @@ sqlite3 ~/.clawdbot/memory/facts.db "PRAGMA journal_mode;"
 ```
 
 **Solutions:**
+
 - Ensure only one gateway instance is running
 - If stuck, safely stop all processes and delete WAL files:
   ```bash
@@ -635,6 +684,7 @@ sqlite3 ~/.clawdbot/memory/facts.db "PRAGMA journal_mode;"
 ### Problem: High memory usage
 
 **Diagnosis:**
+
 ```bash
 # Check database size
 moltbot memory facts stats --json | jq '.dbSizeMb'
@@ -644,6 +694,7 @@ moltbot memory facts stats --json | jq '.totalFacts'
 ```
 
 **Solutions:**
+
 - Run cleanup: `moltbot memory facts cleanup --force --vacuum`
 - Lower retention limits
 - Enable `pruneLowImportance`
@@ -654,19 +705,25 @@ moltbot memory facts stats --json | jq '.totalFacts'
 
 Use this checklist to validate Real Agent Integration (Phase 3b).
 
-1) **Stub mode (default)** — completes without API keys:
+1. **Stub mode (default)** — completes without API keys:
+
 ```
 moltbot workflow start --type dev-cycle --task "add feature" --repo .
 ```
+
 Expected artifacts:
+
 - `~/.clawdbot/workflows/<runId>/phases/01-planning/artifacts/plan.md`
 - `~/.clawdbot/workflows/<runId>/phases/01-planning/artifacts/tasks.json`
 
-2) **Live mode** — requires provider auth:
+2. **Live mode** — requires provider auth:
+
 ```
 moltbot workflow start --type dev-cycle --task "add feature" --repo . --live
 ```
+
 Expected artifacts:
+
 - `~/.clawdbot/workflows/<runId>/phases/<n>-<phase>/handoff/`
 - `~/.clawdbot/workflows/<runId>/phases/<n>-<phase>/session.jsonl`
 - Orchestrator + observability logs:
@@ -733,14 +790,14 @@ moltbot memory facts cleanup --force --vacuum
 
 ### Recommended Schedule
 
-| Task | Frequency | Duration | Impact |
-|------|-----------|----------|--------|
-| Health check | Daily | < 1s | None |
-| Backup | Daily | 1-5 min | None |
-| Cleanup | Weekly | 1-10 min | Minimal |
-| Vacuum | Weekly | 1-30 min | DB locked briefly |
-| Integrity check | Monthly | 1-5 min | None |
-| FTS reindex | As needed | 5-30 min | Search unavailable |
+| Task            | Frequency | Duration | Impact             |
+| --------------- | --------- | -------- | ------------------ |
+| Health check    | Daily     | < 1s     | None               |
+| Backup          | Daily     | 1-5 min  | None               |
+| Cleanup         | Weekly    | 1-10 min | Minimal            |
+| Vacuum          | Weekly    | 1-30 min | DB locked briefly  |
+| Integrity check | Monthly   | 1-5 min  | None               |
+| FTS reindex     | As needed | 5-30 min | Search unavailable |
 
 ### Before Maintenance
 

@@ -8,12 +8,12 @@ An ADR is a document that captures an important architectural decision made alon
 
 ## Index
 
-| ADR | Title | Status | Date |
-|-----|-------|--------|------|
-| [0000](0000-adr-template.md) | ADR Template | - | - |
-| [0001](0001-websocket-gateway.md) | WebSocket Gateway Architecture | accepted | 2024-01-15 |
-| [0002](0002-per-sender-sessions.md) | Per-Sender Session Model | accepted | 2024-02-01 |
-| [0003](0003-sqlite-facts-memory.md) | SQLite for Facts Memory | accepted | 2024-06-01 |
+| ADR                                 | Title                          | Status   | Date       |
+| ----------------------------------- | ------------------------------ | -------- | ---------- |
+| [0000](0000-adr-template.md)        | ADR Template                   | -        | -          |
+| [0001](0001-websocket-gateway.md)   | WebSocket Gateway Architecture | accepted | 2024-01-15 |
+| [0002](0002-per-sender-sessions.md) | Per-Sender Session Model       | accepted | 2024-02-01 |
+| [0003](0003-sqlite-facts-memory.md) | SQLite for Facts Memory        | accepted | 2024-06-01 |
 
 ## Status Definitions
 

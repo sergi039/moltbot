@@ -7,12 +7,14 @@
 ## Context
 
 OpenClaw needs a communication layer between the gateway (central hub) and various clients:
+
 - Native apps (macOS, iOS, Android)
 - Web UI (Control Panel)
 - Channel plugins (Telegram, Discord, WhatsApp, etc.)
 - CLI tools
 
 Requirements:
+
 1. Real-time bidirectional communication for streaming responses
 2. Low latency for interactive AI conversations
 3. Support for long-running operations (tool execution, thinking)
@@ -64,6 +66,7 @@ Client <--WebSocket--> Gateway <--Internal--> Agent Runtime
 ### HTTP/REST with Polling
 
 Rejected because:
+
 - High latency for real-time updates
 - Inefficient for streaming responses
 - Poor UX for long-running operations
@@ -71,6 +74,7 @@ Rejected because:
 ### HTTP/2 Server-Sent Events (SSE)
 
 Rejected because:
+
 - Unidirectional only (server to client)
 - Would need separate HTTP endpoint for client-to-server
 - Less mature client library support
@@ -78,6 +82,7 @@ Rejected because:
 ### gRPC
 
 Rejected because:
+
 - Adds complexity (protobuf compilation)
 - Browser support requires grpc-web proxy
 - Overkill for our use case

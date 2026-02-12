@@ -33,6 +33,7 @@ The recommended way to start the gateway:
 ```
 
 This script:
+
 1. Switches to `release/memory-v1`
 2. Rebuilds UI and dist
 3. Restarts the gateway via LaunchAgent
@@ -46,6 +47,7 @@ OPENCLAW_STATE_DIR=~/.openclaw openclaw gateway run
 ```
 
 **Guardrails:** The `gateway-preflight.sh` script will block gateway startup if:
+
 - Branch is not `release/memory-v1`
 - Build SHA doesn't match git HEAD (stale build)
 
@@ -156,11 +158,13 @@ We keep upstream skills in `skills/` and local/custom skills in `skills-local/`.
 During deployment, both are merged into the runtime skills directory.
 
 Sync command:
+
 ```bash
 ./scripts/sync-skills.sh --profile default
 ```
 
 Overlay behavior:
+
 - `skills/` is the base (upstream)
 - `skills-local/` overrides or adds custom skills
 
@@ -170,9 +174,9 @@ Overlay behavior:
 
 Gateway **will not start** without these config values:
 
-| Key | Required Value | Description |
-|-----|---------------|-------------|
-| `gateway.mode` | `local` | Enables local gateway mode |
+| Key                  | Required Value       | Description                |
+| -------------------- | -------------------- | -------------------------- |
+| `gateway.mode`       | `local`              | Enables local gateway mode |
 | `gateway.auth.token` | any non-empty string | Auth token for gateway API |
 
 ### Setting config
@@ -193,11 +197,11 @@ pnpm openclaw config set gateway.auth.token "your-secret-token"
 
 ### Common errors
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `gateway.mode must be 'local'` | Config missing or reset | Set `gateway.mode local` |
-| `gateway.auth.token is missing` | Token not set | Set `gateway.auth.token` |
-| `CONFIG_INVALID` | Restore/update wiped config | Re-run config set commands |
+| Error                           | Cause                       | Fix                        |
+| ------------------------------- | --------------------------- | -------------------------- |
+| `gateway.mode must be 'local'`  | Config missing or reset     | Set `gateway.mode local`   |
+| `gateway.auth.token is missing` | Token not set               | Set `gateway.auth.token`   |
+| `CONFIG_INVALID`                | Restore/update wiped config | Re-run config set commands |
 
 ### LaunchAgent
 
@@ -209,6 +213,7 @@ launchctl load ~/Library/LaunchAgents/com.moltbot.gateway.plist
 ```
 
 The LaunchAgent uses `gateway-preflight.sh` which:
+
 - Validates config before starting gateway
 - Exits with code 1 if config invalid (prevents infinite restart loop)
 - Only restarts if gateway crashed (exit 0)
@@ -220,11 +225,13 @@ The LaunchAgent uses `gateway-preflight.sh` which:
 The macOS companion app (DMG/ZIP) is a **client** and updates **independently** of the Gateway.
 
 Rules:
+
 - Updating the macOS app does **not** update or overwrite the Gateway code.
 - Custom features live in the Gateway (release branch), not the client.
 - If the app gains new UI features, the Gateway may need to be updated to support them.
 
 Operational guidance:
+
 - Update Gateway via the release pipeline (main → release → prod).
 - Update the macOS app via the official releases channel.
 
@@ -290,21 +297,21 @@ Or use the verification script:
 
 ### Recovery steps
 
-1) Save local changes for review:
+1. Save local changes for review:
 
 ```
 cd ~/openclaw-prod
 git diff > /tmp/prod.patch
 ```
 
-2) Reset prod to upstream:
+2. Reset prod to upstream:
 
 ```
 git fetch upstream
 git reset --hard upstream/main
 ```
 
-3) Apply changes in dev repo (if needed):
+3. Apply changes in dev repo (if needed):
 
 ```
 cd ~/moltbot
@@ -312,7 +319,7 @@ git checkout -b prod-hotfix
 git apply /tmp/prod.patch
 ```
 
-4) Rebuild + restart gateway:
+4. Rebuild + restart gateway:
 
 ```
 pnpm install
@@ -367,8 +374,12 @@ pnpm ui:build
 pnpm build
 launchctl kickstart -k gui/$UID/com.moltbot.gateway.prod
 ```
-  - Документация и rollback присутствуют
-  - Риски: приемлемые, процедура отката зафиксирована
 
-  Decision: APPROVED for production release.
+- Документация и rollback присутствуют
+- Риски: приемлемые, процедура отката зафиксирована
+
+Decision: APPROVED for production release.
+
+```
+
 ```

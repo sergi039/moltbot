@@ -76,23 +76,23 @@ factsMemory:
   enabled: true
 
   extraction:
-    model: "haiku"                    # LLM model for extraction
-    maxMessagesPerExtraction: 10      # Max messages per batch
-    cooldownMs: 60000                 # Min time between extractions
+    model: "haiku" # LLM model for extraction
+    maxMessagesPerExtraction: 10 # Max messages per batch
+    cooldownMs: 60000 # Min time between extractions
 
   retrieval:
-    maxFacts: 20                      # Max facts in context
-    maxTokens: 2000                   # Token budget for context
+    maxFacts: 20 # Max facts in context
+    maxTokens: 2000 # Token budget for context
 
   retention:
-    maxAgeDays: 365                   # Max age before pruning
-    maxSizeMb: 100                    # Max database size
-    pruneLowImportance: true          # Prune low-importance facts first
+    maxAgeDays: 365 # Max age before pruning
+    maxSizeMb: 100 # Max database size
+    pruneLowImportance: true # Prune low-importance facts first
 
   health:
-    maxDbSizeMb: 500                  # Alert threshold for DB size
-    maxErrorsPerDay: 10               # Alert threshold for errors
-    maxStaleDays: 7                   # Alert if no extraction for N days
+    maxDbSizeMb: 500 # Alert threshold for DB size
+    maxErrorsPerDay: 10 # Alert threshold for errors
+    maxStaleDays: 7 # Alert if no extraction for N days
 
   # Optional: Role-based access control
   access:
@@ -142,16 +142,19 @@ moltbot memory facts stats
 If upgrading from a development version:
 
 1. **Backup existing data:**
+
    ```bash
    moltbot memory facts export --out ~/backup-pre-upgrade.jsonl
    ```
 
 2. **Update OpenClaw:**
+
    ```bash
    npm install -g openclaw@latest
    ```
 
 3. **Run repair** (ensures schema is current):
+
    ```bash
    moltbot memory facts repair --check --reindex
    ```
@@ -167,28 +170,28 @@ If upgrading from a development version:
 
 ### CLI Commands
 
-| Command | Description |
-|---------|-------------|
-| `moltbot memory facts stats` | Show statistics |
-| `moltbot memory facts health` | Health check |
-| `moltbot memory facts alerts` | View recent alerts |
-| `moltbot memory facts top` | List top facts |
+| Command                              | Description                |
+| ------------------------------------ | -------------------------- |
+| `moltbot memory facts stats`         | Show statistics            |
+| `moltbot memory facts health`        | Health check               |
+| `moltbot memory facts alerts`        | View recent alerts         |
+| `moltbot memory facts top`           | List top facts             |
 | `moltbot memory facts trace "query"` | Search with explainability |
-| `moltbot memory facts cleanup` | Run retention cleanup |
-| `moltbot memory facts export` | Export to JSONL |
-| `moltbot memory facts import` | Import from JSONL |
-| `moltbot memory facts repair` | Database repair |
+| `moltbot memory facts cleanup`       | Run retention cleanup      |
+| `moltbot memory facts export`        | Export to JSONL            |
+| `moltbot memory facts import`        | Import from JSONL          |
+| `moltbot memory facts repair`        | Database repair            |
 
 ### HTTP Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/memory/facts/status` | Memory status |
-| GET | `/api/memory/facts/top` | Top facts list |
-| GET | `/api/memory/facts/trace` | Search with trace |
-| POST | `/api/memory/facts/delete` | Delete a fact |
-| POST | `/api/memory/facts/update` | Update importance |
-| POST | `/api/memory/facts/merge` | Merge two facts |
+| Method | Endpoint                   | Description       |
+| ------ | -------------------------- | ----------------- |
+| GET    | `/api/memory/facts/status` | Memory status     |
+| GET    | `/api/memory/facts/top`    | Top facts list    |
+| GET    | `/api/memory/facts/trace`  | Search with trace |
+| POST   | `/api/memory/facts/delete` | Delete a fact     |
+| POST   | `/api/memory/facts/update` | Update importance |
+| POST   | `/api/memory/facts/merge`  | Merge two facts   |
 
 ---
 
@@ -215,11 +218,13 @@ None. This is the initial production release.
 If issues occur after deployment:
 
 1. **Disable memory system:**
+
    ```bash
    moltbot config set factsMemory.enabled false
    ```
 
 2. **Restart gateway:**
+
    ```bash
    pkill -f "openclaw gateway"
    nohup openclaw gateway run > /tmp/openclaw-gateway.log 2>&1 &
@@ -258,6 +263,7 @@ After deployment, verify:
 ### 1.0.0 (2026-02-01)
 
 **Phase 1: Core Memory System**
+
 - SQLite schema with FTS5 and WAL
 - Memory types: fact, preference, decision, event, todo
 - Memory blocks: persona, user_profile, active_context
@@ -265,11 +271,13 @@ After deployment, verify:
 - Rule-based classifier
 
 **Phase 2: Retrieval + Consolidation**
+
 - Query-time retrieval with FTS + scoring
 - Daily and weekly consolidation
 - Importance-based pruning
 
 **Phase 3: Integration + Reliability**
+
 - Pipeline integration hooks
 - SQLite connection pooling
 - Embeddings with fallback
@@ -277,28 +285,33 @@ After deployment, verify:
 - Scheduler for background jobs
 
 **Phase 4: Retention + Guardrails**
+
 - Retention policies (age, size, importance)
 - Extraction guardrails (rate limits, cooldown)
 - CLI: stats, cleanup commands
 
 **Phase 5: Reliability + Explainability**
+
 - Database repair (integrity, reindex, vacuum)
 - JSONL export/import
 - Retrieval trace (explainability)
 - CLI: trace, top commands
 
 **Phase 6: Safety + Governance**
+
 - Redaction-safe export
 - Role-based access control (admin, operator, analyst, guest)
 - Access audit logging
 
 **Phase 7: Ops + Monitoring**
+
 - Health check snapshots
 - Threshold-based alerts
 - CLI: health, alerts commands
 - Dashboard status integration
 
 **Phase 8: UX + Productization**
+
 - UI: Memory status panel
 - UI: Top facts table with filters
 - UI: Per-fact actions (delete, update, merge)

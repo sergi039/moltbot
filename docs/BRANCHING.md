@@ -9,11 +9,13 @@ This repository follows the **standard upstream workflow** (no custom release br
 
 ## Rules
 
-1) **No custom release branches**
+1. **No custom release branches**
+
 - Production runs from `main`
 - Keep `main` clean and in sync with `upstream/main`
 
-2) **Manual updates only**
+2. **Manual updates only**
+
 - Auto-update is disabled for production
 - Daily cron only checks upstream and notifies
 

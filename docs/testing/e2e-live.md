@@ -10,14 +10,15 @@ read_when:
 # E2E Workflow Testing
 
 This guide covers end-to-end validation of workflows in two modes:
+
 - **Stub mode** (default): Tests workflow mechanics without API keys
 - **Live mode**: Tests real agent execution with API keys
 
 ## Paths
 
-| Type | Path |
-|------|------|
-| Config | `~/.openclaw/openclaw.json` |
+| Type             | Path                                                    |
+| ---------------- | ------------------------------------------------------- |
+| Config           | `~/.openclaw/openclaw.json`                             |
 | Workflow storage | `~/.clawdbot/workflows` (or `MOLTBOT_WORKFLOW_STORAGE`) |
 
 ## Quick Start
@@ -41,6 +42,7 @@ This guide covers end-to-end validation of workflows in two modes:
 ### Stub Mode (Default)
 
 Tests workflow mechanics without real agent execution:
+
 - No API keys required
 - Workflow starts/completes with stub runner
 - Events and artifacts generated
@@ -53,6 +55,7 @@ Tests workflow mechanics without real agent execution:
 ### Live Mode
 
 Tests real agent execution with actual LLM calls:
+
 - Requires `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
 - Real agent runs with policy enforcement
 - Approval prompts may trigger
@@ -64,18 +67,19 @@ ANTHROPIC_API_KEY=sk-... ./scripts/e2e-live-smoke.sh --live
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ANTHROPIC_API_KEY` | Anthropic API key (live mode) | - |
-| `OPENAI_API_KEY` | OpenAI API key (live mode) | - |
-| `MOLTBOT_SMOKE_TIMEOUT` | Approval timeout in ms (live mode) | 10000 |
-| `MOLTBOT_WORKFLOW_STORAGE` | Workflow storage path | `~/.clawdbot/workflows` |
+| Variable                   | Description                        | Default                 |
+| -------------------------- | ---------------------------------- | ----------------------- |
+| `ANTHROPIC_API_KEY`        | Anthropic API key (live mode)      | -                       |
+| `OPENAI_API_KEY`           | OpenAI API key (live mode)         | -                       |
+| `MOLTBOT_SMOKE_TIMEOUT`    | Approval timeout in ms (live mode) | 10000                   |
+| `MOLTBOT_WORKFLOW_STORAGE` | Workflow storage path              | `~/.clawdbot/workflows` |
 
 ## Manual Test Scenarios
 
 ### 1. Smoke Workflow (Stub)
 
 **Steps:**
+
 ```bash
 moltbot workflow start \
   --type dev-cycle \
@@ -84,12 +88,14 @@ moltbot workflow start \
 ```
 
 **Verify:**
+
 ```bash
 moltbot workflow status <run-id>
 ls ~/.clawdbot/workflows/<run-id>/
 ```
 
 **Expected:**
+
 - `run.json` with status
 - `events.jsonl` with workflow events
 - Artifacts in `artifacts/` directory
@@ -99,6 +105,7 @@ ls ~/.clawdbot/workflows/<run-id>/
 ### 2. Smoke Workflow (Live)
 
 **Setup:**
+
 ```bash
 export ANTHROPIC_API_KEY=sk-...
 # Or
@@ -106,6 +113,7 @@ export OPENAI_API_KEY=sk-...
 ```
 
 **Steps:**
+
 ```bash
 moltbot workflow start \
   --type dev-cycle \
@@ -115,12 +123,14 @@ moltbot workflow start \
 ```
 
 **Verify:**
+
 ```bash
 moltbot workflow logs <run-id>
 cat ~/.clawdbot/workflows/<run-id>/events.jsonl
 ```
 
 **Expected:**
+
 - `events.jsonl` contains `agent.start`, `agent.complete`, `policy.*`
 - Artifacts: `plan.md`, `tasks.json`, `execution-report.json`, `review.json`
 
@@ -129,6 +139,7 @@ cat ~/.clawdbot/workflows/<run-id>/events.jsonl
 ### 3. Approval Prompt (Approve Flow)
 
 **Steps:**
+
 1. Start live workflow with task requiring shell execution
 2. When prompt appears, select **Approve once**
 3. On next prompt, select **Approve and remember for this run**
@@ -142,12 +153,14 @@ moltbot workflow start \
 ```
 
 **Verify:**
+
 ```bash
 moltbot workflow logs <run-id> --type approval
 cat ~/.clawdbot/workflows/<run-id>/approvals.jsonl
 ```
 
 **Expected:**
+
 - Prompt shows risk info
 - `approvals.jsonl` contains records
 - Remembered actions auto-approved
@@ -157,10 +170,12 @@ cat ~/.clawdbot/workflows/<run-id>/approvals.jsonl
 ### 4. Deny Flow
 
 **Steps:**
+
 1. Start live workflow
 2. On prompt, select **Deny**
 
 **Expected:**
+
 - Workflow status: `failed`
 - Error contains "denied"
 - `events.jsonl` contains `approval.denied`
@@ -170,20 +185,24 @@ cat ~/.clawdbot/workflows/<run-id>/approvals.jsonl
 ### 5. Timeout Flow
 
 **Setup:**
+
 ```bash
 # Set short timeout
 openclaw config set workflows.policy.approvalTimeoutMs 5000
 ```
 
 **Steps:**
+
 1. Start live workflow
 2. Do NOT respond to prompt
 
 **Expected:**
+
 - Workflow fails with timeout
 - `approvals.jsonl` contains timeout record
 
 **Cleanup:**
+
 ```bash
 openclaw config set workflows.policy.approvalTimeoutMs 60000
 ```
@@ -195,6 +214,7 @@ openclaw config set workflows.policy.approvalTimeoutMs 60000
 Default policy blocks dangerous commands.
 
 **Expected:**
+
 - `rm -rf /`, `curl | bash` blocked
 - `events.jsonl` contains `policy.deny`
 
@@ -214,6 +234,7 @@ moltbot workflow cleanup
 ```
 
 **Verify:**
+
 ```bash
 moltbot workflow logs --global
 ```
@@ -252,17 +273,20 @@ moltbot workflow logs --global
 ## Troubleshooting
 
 ### No API Keys (Live Mode)
+
 ```bash
 openclaw models list
 openclaw models auth
 ```
 
 ### Workflow Stuck
+
 ```bash
 moltbot workflow cancel <run-id>
 ```
 
 ### Clean Slate
+
 ```bash
 rm -rf ~/.clawdbot/workflows/*
 ```

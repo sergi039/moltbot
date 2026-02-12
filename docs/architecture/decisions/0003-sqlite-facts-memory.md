@@ -89,6 +89,7 @@ Vector search uses sqlite-vss extension when available, with fallback to brute-f
 ### PostgreSQL with pgvector
 
 Rejected because:
+
 - External dependency (server process)
 - Overkill for personal assistant use case
 - Complicates installation and deployment
@@ -96,6 +97,7 @@ Rejected because:
 ### Redis
 
 Rejected because:
+
 - No built-in vector search (requires Redis Stack)
 - Persistence not as robust as SQLite
 - Memory-bound (expensive for large datasets)
@@ -103,6 +105,7 @@ Rejected because:
 ### Pinecone/Weaviate/Milvus
 
 Rejected because:
+
 - External service or heavy local process
 - API costs (Pinecone)
 - Complexity for single-user deployment
@@ -110,6 +113,7 @@ Rejected because:
 ### Plain JSON Files
 
 Rejected because:
+
 - No efficient full-text search
 - No transactional safety
 - Performance degrades with size

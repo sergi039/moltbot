@@ -5,7 +5,7 @@
       "id": "rec-1",
       "priority": "must",
       "description": "Commit and push the smoke-test console.log changes (and any supporting scripts/docs) before requesting another review.",
-      "rationale": "The current diff is empty, so reviewers cannot validate the task." 
+      "rationale": "The current diff is empty, so reviewers cannot validate the task."
     },
     {
       "id": "rec-2",

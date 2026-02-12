@@ -24,6 +24,7 @@ Notes: <short summary of change or blocker>
 - [x] Log events for repair start/finish/fail
 
 Acceptance criteria:
+
 - `repair --check` returns `ok` or a descriptive error
 - `repair --reindex` restores FTS search results for existing facts
 - `repair --vacuum` is safe on empty DB and does not corrupt data
@@ -44,6 +45,7 @@ Notes: repair.ts + repair.test.ts (9 tests), CLI command implemented
 - [x] CLI: `moltbot memory facts export --out <file>` / `import --in <file>`
 
 Acceptance criteria:
+
 - Export creates 1 JSON object per line
 - Import `--replace` clears DB before restore
 - Import `--merge` retains existing facts and adds missing entries
@@ -64,6 +66,7 @@ Notes: export.ts + import.ts + export-import.test.ts (8 tests), CLI commands imp
 - [x] Include reasons: FTS, importance, recent
 
 Acceptance criteria:
+
 - `getFactsRelevantContext()` returns `{ context, reasons[] }`
 - JSON output includes reason metadata for each fact
 - No changes to default prompt output unless `--json`/`--verbose` is used
@@ -83,6 +86,7 @@ Notes: RetrievalTrace types, getRelevantContextWithTrace(), CLI `facts trace`, r
 - [x] Optional `--type` filter (fact/preference/decision/event/todo)
 
 Acceptance criteria:
+
 - `top` output sorted by score and stable across runs
 - `--type` only returns matching categories
 
@@ -105,6 +109,7 @@ Notes: `top --limit` and `--type` filter implemented, 5 new tests added
 - [x] Export result reports redaction applied and memories excluded
 
 Acceptance criteria:
+
 - `export --redact` masks sensitive data in JSONL output
 - `export --exclude-types preference,decision` excludes those types
 - Original DB data is unchanged; only export is redacted
@@ -126,6 +131,7 @@ Notes: redaction.ts + export.ts updated, redaction.test.ts (24 tests)
 - [x] Audit events logged for memory access
 
 Acceptance criteria:
+
 - `top --role analyst` only shows fact + event types
 - `trace --role guest` only shows facts in retrieval results
 - Audit events logged with role, included/excluded counts
@@ -148,6 +154,7 @@ Notes: access.ts + access.test.ts (25 tests), CLI commands updated
 - [x] Config schema validation tests
 
 Acceptance criteria:
+
 - Config validates correctly with access/redaction settings
 - `getFactsRelevantContextWithTrace()` filters by role when `access.enabled=true`
 - Export blocked for roles without `canExport`
@@ -171,6 +178,7 @@ Notes: Config schema in types.openclaw.ts + zod-schema.ts, runtime filtering in 
 - [x] Threshold alerts: maxDbSizeMb, maxErrorsPerDay, maxStaleDays
 
 Acceptance criteria:
+
 - Health event published once daily
 - When threshold exceeded → warning event memory.alert
 - Alerts written to logs
@@ -190,6 +198,7 @@ Notes: health.ts + health.test.ts (18 tests), scheduler.ts updated for health ch
 - [x] `moltbot memory facts alerts` command
 
 Acceptance criteria:
+
 - health → last health snapshot + thresholds
 - alerts → list of recent alert events
 - JSON output is correct
@@ -209,6 +218,7 @@ Notes: CLI commands added to memory-cli.ts with --json and --check options
 - [x] Connect health/alerts to existing status view
 
 Acceptance criteria:
+
 - /status shows Memory health summary
 
 ```
@@ -231,6 +241,7 @@ Notes: Facts Memory row added to status command overview table, shows status/fac
 - [x] Tests for memory HTTP endpoints (12 tests)
 
 Acceptance criteria:
+
 - UI shows memory status (enabled, dbSize, totalFacts, alerts, status)
 - Top facts displayed in table with type/content/importance/lastAccessed
 - Type and limit filters for top facts
@@ -254,6 +265,7 @@ Notes: memory-http.ts + memory-http.test.ts (12 tests), UI controller/view in ui
 - [x] Confirmation dialogs (delete confirmation via browser confirm)
 
 Acceptance criteria:
+
 - Actions modify DB and are reflected in status
 - API validates inputs (importance 0-1, sourceId != targetId)
 - Audit events logged for success/failure
@@ -277,6 +289,7 @@ Notes: Backend API (memory-http.ts + 31 tests), UI controller with optimistic up
 - [x] Tests for trace endpoint (8 new tests, 39 total)
 
 Acceptance criteria:
+
 - Trace endpoint returns query, timestamp, included/excluded counts, reasons[], context
 - UI search panel has query input, role/limit filters, search/clear buttons
 - Results show type chip, content, score, importance, access count

@@ -32,15 +32,16 @@ Examples:
 
 Configure via `session.dmScope`:
 
-| Scope | Behavior | Use Case |
-|-------|----------|----------|
-| `main` | All DMs share main session | Single-user personal assistant |
-| `per-channel-peer` | Separate session per sender per channel | Multi-user with isolation |
-| `per-account-channel-peer` | Separate by account + channel + sender | Multi-account setups |
+| Scope                      | Behavior                                | Use Case                       |
+| -------------------------- | --------------------------------------- | ------------------------------ |
+| `main`                     | All DMs share main session              | Single-user personal assistant |
+| `per-channel-peer`         | Separate session per sender per channel | Multi-user with isolation      |
+| `per-account-channel-peer` | Separate by account + channel + sender  | Multi-account setups           |
 
 ### Storage
 
 Sessions are stored as JSONL files under:
+
 ```
 ~/.openclaw/agents/{agentId}/sessions/{sessionId}.jsonl
 ```
@@ -74,6 +75,7 @@ Each line is a timestamped message with full context (role, content, tool calls,
 ### Single Global Session
 
 Rejected because:
+
 - Privacy concerns with multiple users
 - Context pollution between unrelated conversations
 - Difficult to reason about in group settings
@@ -81,6 +83,7 @@ Rejected because:
 ### Database-Backed Sessions
 
 Rejected because:
+
 - JSONL is simpler and human-readable
 - Easy to backup/restore/inspect
 - SQLite later added specifically for Facts Memory (structured data)
@@ -89,6 +92,7 @@ Rejected because:
 ### Per-Message Context (Stateless)
 
 Rejected because:
+
 - Loses conversation continuity
 - Higher API costs (full context every message)
 - Poor user experience for multi-turn conversations
