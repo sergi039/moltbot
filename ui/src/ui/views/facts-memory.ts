@@ -5,8 +5,12 @@
  */
 
 import { html, nothing } from "lit";
-
-import type { FactsMemoryStatus, TopFactItem, TraceResult, TraceReasonItem } from "../controllers/facts-memory";
+import type {
+  FactsMemoryStatus,
+  TopFactItem,
+  TraceResult,
+  TraceReasonItem,
+} from "../controllers/facts-memory.js";
 
 // ============================================================================
 // Types
@@ -60,14 +64,22 @@ export type MemorySearchProps = {
 // ============================================================================
 
 function formatRelativeTime(timestamp: number | null): string {
-  if (!timestamp) return "never";
+  if (!timestamp) {
+    return "never";
+  }
 
   const now = Date.now();
   const diff = now - timestamp;
 
-  if (diff < 60000) return "just now";
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  if (diff < 60000) {
+    return "just now";
+  }
+  if (diff < 3600000) {
+    return `${Math.floor(diff / 60000)}m ago`;
+  }
+  if (diff < 86400000) {
+    return `${Math.floor(diff / 3600000)}h ago`;
+  }
   return `${Math.floor(diff / 86400000)}d ago`;
 }
 
@@ -102,7 +114,9 @@ function getStatusIcon(status: string): string {
 }
 
 function truncateContent(content: string, maxLen: number = 80): string {
-  if (content.length <= maxLen) return content;
+  if (content.length <= maxLen) {
+    return content;
+  }
   return content.slice(0, maxLen - 3) + "...";
 }
 
@@ -125,15 +139,19 @@ export function renderFactsMemoryStatus(props: FactsMemoryStatusProps) {
         </button>
       </div>
 
-      ${error
-        ? html`<div class="callout danger" style="margin-top: 12px;">${error}</div>`
-        : nothing}
+      ${
+        error ? html`<div class="callout danger" style="margin-top: 12px;">${error}</div>` : nothing
+      }
 
-      ${status
-        ? renderStatusDetails(status)
-        : !loading && !error
-          ? html`<div class="callout" style="margin-top: 12px;">No status available.</div>`
-          : nothing}
+      ${
+        status
+          ? renderStatusDetails(status)
+          : !loading && !error
+            ? html`
+                <div class="callout" style="margin-top: 12px">No status available.</div>
+              `
+            : nothing
+      }
     </section>
   `;
 }
@@ -238,15 +256,19 @@ export function renderTopFacts(props: TopFactsProps) {
         </div>
       </div>
 
-      ${error
-        ? html`<div class="callout danger" style="margin-top: 12px;">${error}</div>`
-        : nothing}
+      ${
+        error ? html`<div class="callout danger" style="margin-top: 12px;">${error}</div>` : nothing
+      }
 
-      ${facts.length > 0
-        ? renderFactsTable(facts, props)
-        : !loading && !error
-          ? html`<div class="callout" style="margin-top: 12px;">No facts found.</div>`
-          : nothing}
+      ${
+        facts.length > 0
+          ? renderFactsTable(facts, props)
+          : !loading && !error
+            ? html`
+                <div class="callout" style="margin-top: 12px">No facts found.</div>
+              `
+            : nothing
+      }
     </section>
   `;
 }
@@ -263,7 +285,13 @@ function renderFactsTable(facts: TopFactItem[], props: TopFactsProps) {
             <th>Content</th>
             <th>Importance</th>
             <th>Last Accessed</th>
-            ${hasActions ? html`<th>Actions</th>` : nothing}
+            ${
+              hasActions
+                ? html`
+                    <th>Actions</th>
+                  `
+                : nothing
+            }
           </tr>
         </thead>
         <tbody>
@@ -287,9 +315,10 @@ function renderFactRow(fact: TopFactItem, props: TopFactsProps) {
         ${truncateContent(fact.content)}
       </td>
       <td>
-        ${isEditing
-          ? renderImportanceEdit(fact, props)
-          : html`
+        ${
+          isEditing
+            ? renderImportanceEdit(fact, props)
+            : html`
               <span class="importance-bar">
                 <span
                   class="importance-fill"
@@ -297,7 +326,8 @@ function renderFactRow(fact: TopFactItem, props: TopFactsProps) {
                 ></span>
                 <span class="importance-text">${(fact.importance * 100).toFixed(0)}%</span>
               </span>
-            `}
+            `
+        }
       </td>
       <td>${formatRelativeTime(fact.lastAccessedAt)}</td>
       ${hasActions ? renderFactActions(fact, props) : nothing}
@@ -345,10 +375,12 @@ function renderFactActions(fact: TopFactItem, props: TopFactsProps) {
 
   return html`
     <td class="actions-cell">
-      ${!isEditing
-        ? html`
-            ${props.onUpdateImportance
-              ? html`
+      ${
+        !isEditing
+          ? html`
+            ${
+              props.onUpdateImportance
+                ? html`
                   <button
                     class="btn btn-small"
                     @click=${() => props.onStartEdit?.(fact.id, fact.importance)}
@@ -357,9 +389,11 @@ function renderFactActions(fact: TopFactItem, props: TopFactsProps) {
                     ✎
                   </button>
                 `
-              : nothing}
-            ${props.onDelete
-              ? html`
+                : nothing
+            }
+            ${
+              props.onDelete
+                ? html`
                   <button
                     class="btn btn-small btn-danger"
                     @click=${() => {
@@ -372,9 +406,11 @@ function renderFactActions(fact: TopFactItem, props: TopFactsProps) {
                     ✕
                   </button>
                 `
-              : nothing}
+                : nothing
+            }
           `
-        : nothing}
+          : nothing
+      }
     </td>
   `;
 }
@@ -402,7 +438,19 @@ export function renderFactsMemoryPanel(props: FactsMemoryPanelProps) {
 // ============================================================================
 
 export function renderMemorySearch(props: MemorySearchProps) {
-  const { loading, query, role, limit, result, error, onQueryChange, onRoleChange, onLimitChange, onSearch, onClear } = props;
+  const {
+    loading,
+    query,
+    role,
+    limit,
+    result,
+    error,
+    onQueryChange,
+    onRoleChange,
+    onLimitChange,
+    onSearch,
+    onClear,
+  } = props;
 
   return html`
     <section class="card">
@@ -424,7 +472,9 @@ export function renderMemorySearch(props: MemorySearchProps) {
               .value=${query}
               @input=${(e: Event) => onQueryChange((e.target as HTMLInputElement).value)}
               @keydown=${(e: KeyboardEvent) => {
-                if (e.key === "Enter") onSearch();
+                if (e.key === "Enter") {
+                  onSearch();
+                }
               }}
             />
           </div>
@@ -474,29 +524,37 @@ function renderSearchResults(result: TraceResult) {
         Found <strong>${result.included}</strong> memories (${result.excluded} excluded by role)
       </div>
 
-      ${result.reasons.length > 0
-        ? html`
+      ${
+        result.reasons.length > 0
+          ? html`
             <div class="results-list">
-              ${result.reasons.map((reason) => renderSearchReason(reason))}
+              ${result.reasons.map((reason: TraceReasonItem) => renderSearchReason(reason))}
             </div>
           `
-        : html`<div class="callout">No memories found matching the query.</div>`}
+          : html`
+              <div class="callout">No memories found matching the query.</div>
+            `
+      }
 
-      ${result.context
-        ? html`
+      ${
+        result.context
+          ? html`
             <details class="context-details" style="margin-top: 16px;">
               <summary style="cursor: pointer; font-weight: 500;">Generated Context Preview</summary>
               <pre class="context-preview" style="margin-top: 8px; padding: 12px; background: var(--bg-alt); border-radius: 4px; overflow-x: auto; font-size: 0.85em; white-space: pre-wrap;">${result.context}</pre>
             </details>
           `
-        : nothing}
+          : nothing
+      }
     </div>
   `;
 }
 
 function renderSearchReason(reason: TraceReasonItem) {
-  const importance = typeof reason.metadata.importance === "number" ? reason.metadata.importance : 0;
-  const accessCount = typeof reason.metadata.accessCount === "number" ? reason.metadata.accessCount : 0;
+  const importance =
+    typeof reason.metadata.importance === "number" ? reason.metadata.importance : 0;
+  const accessCount =
+    typeof reason.metadata.accessCount === "number" ? reason.metadata.accessCount : 0;
 
   return html`
     <div class="search-reason" style="padding: 12px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 8px;">

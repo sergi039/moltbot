@@ -39,6 +39,19 @@ import {
   saveExecApprovals,
   updateExecApprovalsFormValue,
 } from "./controllers/exec-approvals.ts";
+import {
+  loadFactsMemoryStatus,
+  loadTopFacts,
+  deleteFact,
+  updateFactImportance,
+  searchMemories,
+  clearSearch,
+  setSearchQuery,
+  setSearchRole,
+  setSearchLimit,
+  setTopFactsFilter,
+  setTopFactsLimit,
+} from "./controllers/facts-memory.ts";
 import { loadLogs } from "./controllers/logs.ts";
 import { loadNodes } from "./controllers/nodes.ts";
 import { loadPresence } from "./controllers/presence.ts";
@@ -236,6 +249,56 @@ export function renderApp(state: AppViewState) {
                 },
                 onConnect: () => state.connect(),
                 onRefresh: () => state.loadOverview(),
+                // Facts memory props
+                factsMemoryLoading: state.factsMemoryLoading,
+                factsMemoryStatus: state.factsMemoryStatus,
+                factsMemoryError: state.factsMemoryError,
+                topFactsLoading: state.topFactsLoading,
+                topFacts: state.topFacts,
+                topFactsError: state.topFactsError,
+                topFactsLimit: state.topFactsLimit,
+                topFactsTypeFilter: state.topFactsTypeFilter,
+                onFactsMemoryRefresh: () => void loadFactsMemoryStatus(state as never),
+                onTopFactsRefresh: () => void loadTopFacts(state as never),
+                onTopFactsLimitChange: (limit) => void setTopFactsLimit(state as never, limit),
+                onTopFactsTypeChange: (type) => void setTopFactsFilter(state as never, type),
+                onDeleteFact: (factId) => void deleteFact(state as never, factId),
+                onUpdateFactImportance: (factId, importance) =>
+                  void updateFactImportance(state as never, factId, importance),
+                editingFactId: state.editingFactId,
+                editingImportance: state.editingImportance,
+                onStartEditFact: (factId, currentImportance) => {
+                  state.editingFactId = factId;
+                  state.editingImportance = currentImportance;
+                },
+                onCancelEditFact: () => {
+                  state.editingFactId = null;
+                },
+                onConfirmEditFact: () => {
+                  if (state.editingFactId) {
+                    void updateFactImportance(
+                      state as never,
+                      state.editingFactId,
+                      state.editingImportance,
+                    );
+                  }
+                  state.editingFactId = null;
+                },
+                onEditImportanceChange: (importance) => {
+                  state.editingImportance = importance;
+                },
+                // Search props
+                searchQuery: state.searchQuery,
+                searchLoading: state.searchLoading,
+                searchResult: state.searchResult,
+                searchError: state.searchError,
+                searchRole: state.searchRole,
+                searchLimit: state.searchLimit,
+                onSearchQueryChange: (query) => setSearchQuery(state as never, query),
+                onSearchRoleChange: (role) => setSearchRole(state as never, role),
+                onSearchLimitChange: (limit) => setSearchLimit(state as never, limit),
+                onSearch: () => void searchMemories(state as never),
+                onClearSearch: () => clearSearch(state as never),
               })
             : nothing
         }

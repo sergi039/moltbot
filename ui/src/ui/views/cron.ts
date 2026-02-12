@@ -377,9 +377,9 @@ function renderScheduleFields(props: CronProps) {
   `;
 }
 
-/** P1: Check if job is silent (deliver:false) */
+/** P1: Check if job is silent (delivery mode is "none") */
 function isSilentJob(job: CronJob): boolean {
-  return job.payload.kind === "agentTurn" && job.payload.deliver === false;
+  return job.payload.kind === "agentTurn" && job.delivery?.mode === "none";
 }
 
 function renderJob(job: CronJob, props: CronProps) {

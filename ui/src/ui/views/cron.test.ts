@@ -111,7 +111,8 @@ describe("cron view", () => {
       schedule: { kind: "cron", expr: "0 * * * *" },
       sessionTarget: "isolated",
       wakeMode: "now",
-      payload: { kind: "agentTurn", message: "Check silently", deliver: false },
+      payload: { kind: "agentTurn", message: "Check silently" },
+      delivery: { mode: "none" },
     };
     render(renderCron(createProps({ jobs: [silentJob] })), container);
 
@@ -130,7 +131,8 @@ describe("cron view", () => {
       schedule: { kind: "cron", expr: "0 * * * *" },
       sessionTarget: "main",
       wakeMode: "now",
-      payload: { kind: "agentTurn", message: "Normal message", deliver: true },
+      payload: { kind: "agentTurn", message: "Normal message" },
+      delivery: { mode: "announce" },
     };
     render(renderCron(createProps({ jobs: [deliverJob] })), container);
 

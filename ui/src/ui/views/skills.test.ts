@@ -1,7 +1,7 @@
 import { render } from "lit";
 import { describe, expect, it, vi } from "vitest";
-import type { SkillStatusEntry, SkillStatusReport } from "../types";
-import { renderSkills, type SkillsProps } from "./skills";
+import type { SkillStatusEntry, SkillStatusReport } from "../types.js";
+import { renderSkills, type SkillsProps } from "./skills.js";
 
 function createSkill(name: string, overrides: Partial<SkillStatusEntry> = {}): SkillStatusEntry {
   return {
@@ -15,8 +15,8 @@ function createSkill(name: string, overrides: Partial<SkillStatusEntry> = {}): S
     disabled: false,
     blockedByAllowlist: false,
     eligible: true,
-    requirements: { bins: [], anyBins: [], env: [], config: [], os: [] },
-    missing: { bins: [], anyBins: [], env: [], config: [], os: [] },
+    requirements: { bins: [], env: [], config: [], os: [] },
+    missing: { bins: [], env: [], config: [], os: [] },
     configChecks: [],
     install: [],
     ...overrides,

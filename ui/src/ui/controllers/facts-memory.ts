@@ -146,9 +146,7 @@ async function fetchJson<T>(url: string, token: string | null): Promise<T> {
 
   const contentType = response.headers.get("content-type") || "";
   if (contentType.includes("text/html")) {
-    throw new Error(
-      "Expected JSON but received HTML. Check gateway URL and auth token.",
-    );
+    throw new Error("Expected JSON but received HTML. Check gateway URL and auth token.");
   }
 
   return response.json() as Promise<T>;
@@ -177,7 +175,9 @@ async function postJson<T>(url: string, token: string | null, body: unknown): Pr
  * Load facts memory status from API.
  */
 export async function loadFactsMemoryStatus(state: FactsMemoryState): Promise<void> {
-  if (state.factsMemoryLoading) return;
+  if (state.factsMemoryLoading) {
+    return;
+  }
 
   state.factsMemoryLoading = true;
   state.factsMemoryError = null;
@@ -199,7 +199,9 @@ export async function loadFactsMemoryStatus(state: FactsMemoryState): Promise<vo
  * Load top facts from API.
  */
 export async function loadTopFacts(state: FactsMemoryState): Promise<void> {
-  if (state.topFactsLoading) return;
+  if (state.topFactsLoading) {
+    return;
+  }
 
   state.topFactsLoading = true;
   state.topFactsError = null;
@@ -341,7 +343,9 @@ export async function mergeFacts(
  * Search memories with trace (explainability).
  */
 export async function searchMemories(state: FactsMemoryState): Promise<void> {
-  if (state.searchLoading || !state.searchQuery.trim()) return;
+  if (state.searchLoading || !state.searchQuery.trim()) {
+    return;
+  }
 
   state.searchLoading = true;
   state.searchError = null;

@@ -270,6 +270,7 @@ export type WorkflowsConfig = {
     /** Interval in minutes between auto-cleanup runs (default: 60). */
     cleanupIntervalMinutes?: number;
   };
+};
 
 export type ConfigValidationIssue = {
   path: string;

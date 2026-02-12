@@ -291,6 +291,26 @@ export class OpenClawApp extends LitElement {
   @state() cronRuns: CronRunLogEntry[] = [];
   @state() cronBusy = false;
 
+  // Facts memory state
+  @state() factsMemoryLoading = false;
+  @state() factsMemoryStatus: import("./controllers/facts-memory.js").FactsMemoryStatus | null =
+    null;
+  @state() factsMemoryError: string | null = null;
+  @state() topFactsLoading = false;
+  @state() topFacts: import("./controllers/facts-memory.js").TopFactItem[] = [];
+  @state() topFactsError: string | null = null;
+  @state() topFactsLimit = 20;
+  @state() topFactsTypeFilter: string | null = null;
+  @state() searchQuery = "";
+  @state() searchLoading = false;
+  @state() searchResult: import("./controllers/facts-memory.js").TraceResult | null = null;
+  @state() searchError: string | null = null;
+  @state() searchRole = "operator";
+  @state() searchLimit = 10;
+  // Fact edit state
+  @state() editingFactId: string | null = null;
+  @state() editingImportance = 0;
+
   @state() skillsLoading = false;
   @state() skillsReport: SkillStatusReport | null = null;
   @state() skillsError: string | null = null;
