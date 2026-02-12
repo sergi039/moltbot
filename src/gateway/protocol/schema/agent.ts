@@ -15,7 +15,7 @@ export const AgentEventSchema = Type.Object(
 export const SendParamsSchema = Type.Object(
   {
     to: NonEmptyString,
-    message: NonEmptyString,
+    message: Type.Optional(Type.String()),
     mediaUrl: Type.Optional(Type.String()),
     mediaUrls: Type.Optional(Type.Array(Type.String())),
     gifPlayback: Type.Optional(Type.Boolean()),
@@ -84,6 +84,7 @@ export const AgentIdentityResultSchema = Type.Object(
     agentId: NonEmptyString,
     name: Type.Optional(NonEmptyString),
     avatar: Type.Optional(NonEmptyString),
+    emoji: Type.Optional(NonEmptyString),
   },
   { additionalProperties: false },
 );

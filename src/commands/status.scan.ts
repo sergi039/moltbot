@@ -1,4 +1,4 @@
-import type { MemoryIndexManager } from "../memory/manager.js";
+import type { MemoryProviderStatus } from "../memory/types.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { withProgress } from "../cli/progress.js";
 import { loadConfig } from "../config/config.js";
@@ -14,6 +14,7 @@ import {
   type HealthSnapshot,
   type HealthAlert,
 } from "../memory/facts/index.js";
+import { getMemorySearchManager } from "../memory/index.js";
 import { runExec } from "../process/exec.js";
 import { buildChannelsTable } from "./status-all/channels.js";
 import { getAgentLocalStatuses } from "./status.agent-local.js";
@@ -21,7 +22,7 @@ import { pickGatewaySelfPresence, resolveGatewayProbeAuth } from "./status.gatew
 import { getStatusSummary } from "./status.summary.js";
 import { getUpdateCheckResult } from "./status.update.js";
 
-type MemoryStatusSnapshot = ReturnType<MemoryIndexManager["status"]> & {
+type MemoryStatusSnapshot = MemoryProviderStatus & {
   agentId: string;
 };
 
@@ -43,7 +44,9 @@ type FactsMemoryHealthStatus = {
 
 function resolveMemoryPluginStatus(cfg: ReturnType<typeof loadConfig>): MemoryPluginStatus {
   const pluginsEnabled = cfg.plugins?.enabled !== false;
-  if (!pluginsEnabled) return { enabled: false, slot: null, reason: "plugins disabled" };
+  if (!pluginsEnabled) {
+    return { enabled: false, slot: null, reason: "plugins disabled" };
+  }
   const raw = typeof cfg.plugins?.slots?.memory === "string" ? cfg.plugins.slots.memory.trim() : "";
   if (raw && raw.toLowerCase() === "none") {
     return { enabled: false, slot: null, reason: 'plugins.slots.memory="none"' };
@@ -142,7 +145,7 @@ export async function scanStatus(
 
       progress.setLabel("Querying channel status…");
       const channelsStatus = gatewayReachable
-        ? await callGateway<Record<string, unknown>>({
+        ? await callGateway({
             method: "channels.status",
             params: {
               probe: false,
@@ -157,32 +160,39 @@ export async function scanStatus(
       progress.setLabel("Summarizing channels…");
       const channels = await buildChannelsTable(cfg, {
         // Show token previews in regular status; keep `status --all` redacted.
-        // Set `OPENCLAW_SHOW_SECRETS=0` to force redaction.
-        showSecrets: process.env.OPENCLAW_SHOW_SECRETS?.trim() !== "0",
+        // Set `CLAWDBOT_SHOW_SECRETS=0` to force redaction.
+        showSecrets: process.env.CLAWDBOT_SHOW_SECRETS?.trim() !== "0",
       });
       progress.tick();
 
       progress.setLabel("Checking memory…");
       const memoryPlugin = resolveMemoryPluginStatus(cfg);
       const memory = await (async (): Promise<MemoryStatusSnapshot | null> => {
-        if (!memoryPlugin.enabled) return null;
-        if (memoryPlugin.slot !== "memory-core") return null;
+        if (!memoryPlugin.enabled) {
+          return null;
+        }
+        if (memoryPlugin.slot !== "memory-core") {
+          return null;
+        }
         const agentId = agentStatus.defaultId ?? "main";
-        const { MemoryIndexManager } = await import("../memory/manager.js");
-        const manager = await MemoryIndexManager.get({ cfg, agentId }).catch(() => null);
-        if (!manager) return null;
+        const { manager } = await getMemorySearchManager({ cfg, agentId });
+        if (!manager) {
+          return null;
+        }
         try {
           await manager.probeVectorAvailability();
         } catch {}
         const status = manager.status();
-        await manager.close().catch(() => {});
+        await manager.close?.().catch(() => {});
         return { agentId, ...status };
       })();
 
       // Check facts memory health
       const factsMemory = ((): FactsMemoryHealthStatus => {
         const factsConfig = cfg.factsMemory;
-        if (factsConfig?.enabled === false) return null;
+        if (factsConfig?.enabled === false) {
+          return null;
+        }
         try {
           const manager = createFactsMemoryManager(factsConfig ?? {});
           const summary = getHealthSummary(

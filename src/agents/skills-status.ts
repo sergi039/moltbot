@@ -15,6 +15,7 @@ import {
   type SkillInstallSpec,
   type SkillsInstallPreferences,
 } from "./skills.js";
+import { resolveBundledSkillsContext } from "./skills/bundled-context.js";
 
 export type SkillStatusConfigCheck = {
   path: string;
@@ -34,6 +35,7 @@ export type SkillStatusEntry = {
   description: string;
   longDescription?: string;
   source: string;
+  bundled: boolean;
   filePath: string;
   baseDir: string;
   skillKey: string;
@@ -110,6 +112,13 @@ function normalizeInstallOptions(
   entry: SkillEntry,
   prefs: SkillsInstallPreferences,
 ): SkillInstallOption[] {
+  // If the skill is explicitly OS-scoped, don't surface install actions on unsupported platforms.
+  // (Installers run locally; remote OS eligibility is handled separately.)
+  const requiredOs = entry.metadata?.os ?? [];
+  if (requiredOs.length > 0 && !requiredOs.includes(process.platform)) {
+    return [];
+  }
+
   const install = entry.metadata?.install ?? [];
   if (install.length === 0) {
     return [];
@@ -168,6 +177,7 @@ function buildSkillStatus(
   config?: OpenClawConfig,
   prefs?: SkillsInstallPreferences,
   eligibility?: SkillEligibilityContext,
+  bundledNames?: Set<string>,
 ): SkillStatusEntry {
   const skillKey = resolveSkillKey(entry);
   const skillConfig = resolveSkillConfig(config, skillKey);
@@ -185,6 +195,10 @@ function buildSkillStatus(
   const longDescriptionRaw =
     entry.frontmatter.long_description ?? entry.frontmatter.longDescription;
   const longDescription = longDescriptionRaw?.trim() ? longDescriptionRaw.trim() : undefined;
+  const bundled =
+    bundledNames && bundledNames.size > 0
+      ? bundledNames.has(entry.skill.name)
+      : entry.skill.source === "openclaw-bundled";
 
   const requiredBins = entry.metadata?.requires?.bins ?? [];
   const requiredAnyBins = entry.metadata?.requires?.anyBins ?? [];
@@ -261,6 +275,7 @@ function buildSkillStatus(
     description: entry.skill.description,
     longDescription,
     source: entry.skill.source,
+    bundled,
     filePath: entry.skill.filePath,
     baseDir: entry.skill.baseDir,
     skillKey,
@@ -294,13 +309,20 @@ export function buildWorkspaceSkillStatus(
   },
 ): SkillStatusReport {
   const managedSkillsDir = opts?.managedSkillsDir ?? path.join(CONFIG_DIR, "skills");
-  const skillEntries = opts?.entries ?? loadWorkspaceSkillEntries(workspaceDir, opts);
+  const bundledContext = resolveBundledSkillsContext();
+  const skillEntries =
+    opts?.entries ??
+    loadWorkspaceSkillEntries(workspaceDir, {
+      config: opts?.config,
+      managedSkillsDir,
+      bundledSkillsDir: bundledContext.dir,
+    });
   const prefs = resolveSkillsInstallPreferences(opts?.config);
   return {
     workspaceDir,
     managedSkillsDir,
     skills: skillEntries.map((entry) =>
-      buildSkillStatus(entry, opts?.config, prefs, opts?.eligibility),
+      buildSkillStatus(entry, opts?.config, prefs, opts?.eligibility, bundledContext.names),
     ),
   };
 }

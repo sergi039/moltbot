@@ -1,9 +1,11 @@
+import type { HeartbeatEventPayload } from "../infra/heartbeat-events.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { formatCliCommand } from "../cli/command-format.js";
 import { withProgress } from "../cli/progress.js";
 import { resolveGatewayPort } from "../config/config.js";
 import { buildGatewayConnectionDetails, callGateway } from "../gateway/call.js";
 import { info } from "../globals.js";
+import { formatTimeAgo } from "../infra/format-time/format-relative.ts";
 import { formatUsageReportLines, loadProviderUsageSummary } from "../infra/provider-usage.js";
 import {
   formatUpdateChannelLabel,
@@ -25,7 +27,6 @@ import { statusAllCommand } from "./status-all.js";
 import { formatGatewayAuthUsed } from "./status-all/format.js";
 import { getDaemonStatusSummary, getNodeDaemonStatusSummary } from "./status.daemon.js";
 import {
-  formatAge,
   formatDuration,
   formatKTokens,
   formatTokensCompact,
@@ -121,6 +122,14 @@ export async function statusCommand(
           }),
       )
     : undefined;
+  const lastHeartbeat =
+    opts.deep && gatewayReachable
+      ? await callGateway<HeartbeatEventPayload | null>({
+          method: "last-heartbeat",
+          params: {},
+          timeoutMs: opts.timeoutMs,
+        }).catch(() => null)
+      : null;
 
   const configChannel = normalizeUpdateChannel(cfg.update?.channel);
   const channelInfo = resolveEffectiveUpdateChannel({
@@ -159,7 +168,7 @@ export async function statusCommand(
           nodeService: nodeDaemon,
           agents: agentStatus,
           securityAudit,
-          ...(health || usage ? { health, usage } : {}),
+          ...(health || usage || lastHeartbeat ? { health, usage, lastHeartbeat } : {}),
         },
         null,
         2,
@@ -232,7 +241,7 @@ export async function statusCommand(
         ? `${agentStatus.bootstrapPendingCount} bootstrapping`
         : "no bootstraps";
     const def = agentStatus.agents.find((a) => a.id === agentStatus.defaultId);
-    const defActive = def?.lastActiveAgeMs != null ? formatAge(def.lastActiveAgeMs) : "unknown";
+    const defActive = def?.lastActiveAgeMs != null ? formatTimeAgo(def.lastActiveAgeMs) : "unknown";
     const defSuffix = def ? ` · default ${def.id} active ${defActive}` : "";
     return `${agentStatus.agents.length} · ${pending} · sessions ${agentStatus.totalSessions}${defSuffix}`;
   })();
@@ -276,6 +285,21 @@ export async function statusCommand(
       })
       .filter(Boolean);
     return parts.length > 0 ? parts.join(", ") : "disabled";
+  })();
+  const lastHeartbeatValue = (() => {
+    if (!opts.deep) {
+      return null;
+    }
+    if (!gatewayReachable) {
+      return warn("unavailable");
+    }
+    if (!lastHeartbeat) {
+      return muted("none");
+    }
+    const age = formatTimeAgo(Date.now() - lastHeartbeat.ts);
+    const channel = lastHeartbeat.channel ?? "unknown";
+    const accountLabel = lastHeartbeat.accountId ? `account ${lastHeartbeat.accountId}` : null;
+    return [lastHeartbeat.status, `${age} ago`, channel, accountLabel].filter(Boolean).join(" · ");
   })();
 
   const storeLabel =
@@ -324,7 +348,9 @@ export async function statusCommand(
   })();
 
   const factsMemoryValue = (() => {
-    if (!factsMemory) return muted("disabled");
+    if (!factsMemory) {
+      return muted("disabled");
+    }
     const statusColor =
       factsMemory.status === "ok" ? ok : factsMemory.status === "warning" ? warn : theme.error;
     const parts: string[] = [];
@@ -388,6 +414,7 @@ export async function statusCommand(
     { Item: "Probes", Value: probesValue },
     { Item: "Events", Value: eventsValue },
     { Item: "Heartbeat", Value: heartbeatValue },
+    ...(lastHeartbeatValue ? [{ Item: "Last heartbeat", Value: lastHeartbeatValue }] : []),
     {
       Item: "Sessions",
       Value: `${summary.sessions.count} active · default ${defaults.model ?? "unknown"}${defaultCtx} · ${storeLabel}`,
@@ -522,7 +549,7 @@ export async function statusCommand(
           ? summary.sessions.recent.map((sess) => ({
               Key: shortenText(sess.key, 32),
               Kind: sess.kind,
-              Age: sess.updatedAt ? formatAge(sess.age) : "no activity",
+              Age: sess.updatedAt ? formatTimeAgo(sess.age) : "no activity",
               Model: sess.model ?? "unknown",
               Tokens: formatTokensCompact(sess),
             }))

@@ -24,6 +24,19 @@ export async function startBrowserControlServerFromConfig(): Promise<BrowserServ
   }
 
   const app = express();
+  app.use((req, res, next) => {
+    const ctrl = new AbortController();
+    const abort = () => ctrl.abort(new Error("request aborted"));
+    req.once("aborted", abort);
+    res.once("close", () => {
+      if (!res.writableEnded) {
+        abort();
+      }
+    });
+    // Make the signal available to browser route handlers (best-effort).
+    (req as unknown as { signal?: AbortSignal }).signal = ctrl.signal;
+    next();
+  });
   app.use(express.json({ limit: "1mb" }));
 
   // SECURITY: Apply Bearer token auth if configured.
@@ -32,7 +45,9 @@ export async function startBrowserControlServerFromConfig(): Promise<BrowserServ
   if (authToken) {
     app.use((req, res, next) => {
       const auth = String(req.headers.authorization ?? "").trim();
-      if (auth === `Bearer ${authToken}`) return next();
+      if (auth === `Bearer ${authToken}`) {
+        return next();
+      }
       res.status(401).json({ error: "Unauthorized: missing or invalid Bearer token" });
     });
     logServer.info("Browser control server auth enabled");

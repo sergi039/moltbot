@@ -5,6 +5,7 @@ import {
   deriveDefaultBrowserControlPort,
   DEFAULT_BROWSER_CONTROL_PORT,
 } from "../config/port-defaults.js";
+import { isLoopbackHost } from "../gateway/net.js";
 import {
   DEFAULT_OPENCLAW_BROWSER_COLOR,
   DEFAULT_OPENCLAW_BROWSER_ENABLED,
@@ -45,13 +46,6 @@ export type ResolvedBrowserProfile = {
   color: string;
   driver: "openclaw" | "extension";
 };
-
-function isLoopbackHost(host: string) {
-  const h = host.trim().toLowerCase();
-  // Note: 0.0.0.0, ::, and [::] are WILDCARD addresses, not loopback.
-  // They bind to all interfaces and should NOT be treated as loopback for security purposes.
-  return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === "::1";
-}
 
 function normalizeHexColor(raw: string | undefined) {
   const value = (raw ?? "").trim();

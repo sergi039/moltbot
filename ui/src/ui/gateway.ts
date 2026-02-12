@@ -5,9 +5,9 @@ import {
   type GatewayClientMode,
   type GatewayClientName,
 } from "../../../src/gateway/protocol/client-info.js";
-import { clearDeviceAuthToken, loadDeviceAuthToken, storeDeviceAuthToken } from "./device-auth";
-import { loadOrCreateDeviceIdentity, signDevicePayload } from "./device-identity";
-import { generateUUID } from "./uuid";
+import { clearDeviceAuthToken, loadDeviceAuthToken, storeDeviceAuthToken } from "./device-auth.ts";
+import { loadOrCreateDeviceIdentity, signDevicePayload } from "./device-identity.ts";
+import { generateUUID } from "./uuid.ts";
 
 export type GatewayEventFrame = {
   type: "event";
@@ -68,28 +68,50 @@ const CONNECT_FAILED_CLOSE_CODE = 4008;
  */
 function generateClientDisplayName(clientId?: string): string {
   // For native apps, use their ID as base
-  if (clientId === GATEWAY_CLIENT_NAMES.MACOS_APP) return "OpenClaw for Mac";
-  if (clientId === GATEWAY_CLIENT_NAMES.IOS_APP) return "OpenClaw for iOS";
-  if (clientId === GATEWAY_CLIENT_NAMES.ANDROID_APP) return "OpenClaw for Android";
-  if (clientId === GATEWAY_CLIENT_NAMES.CLI) return "OpenClaw CLI";
-  if (clientId === GATEWAY_CLIENT_NAMES.NODE_HOST) return "Node Host";
+  if (clientId === GATEWAY_CLIENT_NAMES.MACOS_APP) {
+    return "OpenClaw for Mac";
+  }
+  if (clientId === GATEWAY_CLIENT_NAMES.IOS_APP) {
+    return "OpenClaw for iOS";
+  }
+  if (clientId === GATEWAY_CLIENT_NAMES.ANDROID_APP) {
+    return "OpenClaw for Android";
+  }
+  if (clientId === GATEWAY_CLIENT_NAMES.CLI) {
+    return "OpenClaw CLI";
+  }
+  if (clientId === GATEWAY_CLIENT_NAMES.NODE_HOST) {
+    return "Node Host";
+  }
 
   // For browser clients, detect browser and OS
   const ua = navigator.userAgent;
   let browser = "Browser";
-  if (ua.includes("Edg/")) browser = "Edge";
-  else if (ua.includes("Chrome/")) browser = "Chrome";
-  else if (ua.includes("Firefox/")) browser = "Firefox";
-  else if (ua.includes("Safari/") && !ua.includes("Chrome")) browser = "Safari";
+  if (ua.includes("Edg/")) {
+    browser = "Edge";
+  } else if (ua.includes("Chrome/")) {
+    browser = "Chrome";
+  } else if (ua.includes("Firefox/")) {
+    browser = "Firefox";
+  } else if (ua.includes("Safari/") && !ua.includes("Chrome")) {
+    browser = "Safari";
+  }
 
   const platform = navigator.platform ?? "";
   let os = "Web";
-  if (platform.startsWith("Mac") || ua.includes("Macintosh")) os = "Mac";
-  else if (platform.startsWith("Win") || ua.includes("Windows")) os = "Windows";
-  else if (platform.startsWith("Linux") || ua.includes("Linux")) os = "Linux";
-  else if (ua.includes("iPhone")) os = "iPhone";
-  else if (ua.includes("iPad")) os = "iPad";
-  else if (ua.includes("Android")) os = "Android";
+  if (platform.startsWith("Mac") || ua.includes("Macintosh")) {
+    os = "Mac";
+  } else if (platform.startsWith("Win") || ua.includes("Windows")) {
+    os = "Windows";
+  } else if (platform.startsWith("Linux") || ua.includes("Linux")) {
+    os = "Linux";
+  } else if (ua.includes("iPhone")) {
+    os = "iPhone";
+  } else if (ua.includes("iPad")) {
+    os = "iPad";
+  } else if (ua.includes("Android")) {
+    os = "Android";
+  }
 
   return `${browser} on ${os}`;
 }

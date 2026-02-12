@@ -8,26 +8,43 @@ import {
 } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import type { CanvasHostHandler } from "../canvas-host/server.js";
+import type { GatewayWsClient } from "./server/ws-types.js";
 import { resolveAgentAvatar } from "../agents/identity-avatar.js";
-import { handleA2uiHttpRequest } from "../canvas-host/a2ui.js";
+import {
+  A2UI_PATH,
+  CANVAS_HOST_PATH,
+  CANVAS_WS_PATH,
+  handleA2uiHttpRequest,
+} from "../canvas-host/a2ui.js";
 import { loadConfig } from "../config/config.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { handleSlackHttpRequest } from "../slack/http/index.js";
-import { handleControlUiAvatarRequest, handleControlUiHttpRequest } from "./control-ui.js";
+import { authorizeGatewayConnect, isLocalDirectRequest, type ResolvedGatewayAuth } from "./auth.js";
+import {
+  handleControlUiAvatarRequest,
+  handleControlUiHttpRequest,
+  type ControlUiRootState,
+} from "./control-ui.js";
 import { applyHookMappings } from "./hooks-mapping.js";
 import {
   extractHookToken,
+  getHookAgentPolicyError,
   getHookChannelError,
   type HookMessageChannel,
   type HooksConfigResolved,
+  isHookAgentAllowed,
   normalizeAgentPayload,
   normalizeHookHeaders,
   normalizeWakePayload,
   readJsonBody,
+  resolveHookTargetAgentId,
   resolveHookChannel,
   resolveHookDeliver,
 } from "./hooks.js";
+import { sendUnauthorized } from "./http-common.js";
+import { getBearerToken, getHeader } from "./http-utils.js";
 import { handleMemoryHttpRequest } from "./memory-http.js";
+import { resolveGatewayClientIp } from "./net.js";
 import { handleOpenAiHttpRequest } from "./openai-http.js";
 import { handleOpenResponsesHttpRequest } from "./openresponses-http.js";
 import { handleToolsInvokeHttpRequest } from "./tools-invoke-http.js";
@@ -41,6 +58,7 @@ type HookDispatchers = {
   dispatchAgentHook: (value: {
     message: string;
     name: string;
+    agentId?: string;
     wakeMode: "now" | "next-heartbeat";
     sessionKey: string;
     deliver: boolean;
@@ -59,6 +77,61 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.end(JSON.stringify(body));
 }
 
+function isCanvasPath(pathname: string): boolean {
+  return (
+    pathname === A2UI_PATH ||
+    pathname.startsWith(`${A2UI_PATH}/`) ||
+    pathname === CANVAS_HOST_PATH ||
+    pathname.startsWith(`${CANVAS_HOST_PATH}/`) ||
+    pathname === CANVAS_WS_PATH
+  );
+}
+
+function hasAuthorizedWsClientForIp(clients: Set<GatewayWsClient>, clientIp: string): boolean {
+  for (const client of clients) {
+    if (client.clientIp && client.clientIp === clientIp) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function authorizeCanvasRequest(params: {
+  req: IncomingMessage;
+  auth: ResolvedGatewayAuth;
+  trustedProxies: string[];
+  clients: Set<GatewayWsClient>;
+}): Promise<boolean> {
+  const { req, auth, trustedProxies, clients } = params;
+  if (isLocalDirectRequest(req, trustedProxies)) {
+    return true;
+  }
+
+  const token = getBearerToken(req);
+  if (token) {
+    const authResult = await authorizeGatewayConnect({
+      auth: { ...auth, allowTailscale: false },
+      connectAuth: { token, password: token },
+      req,
+      trustedProxies,
+    });
+    if (authResult.ok) {
+      return true;
+    }
+  }
+
+  const clientIp = resolveGatewayClientIp({
+    remoteAddr: req.socket?.remoteAddress ?? "",
+    forwardedFor: getHeader(req, "x-forwarded-for"),
+    realIp: getHeader(req, "x-real-ip"),
+    trustedProxies,
+  });
+  if (!clientIp) {
+    return false;
+  }
+  return hasAuthorizedWsClientForIp(clients, clientIp);
+}
+
 export type HooksRequestHandler = (req: IncomingMessage, res: ServerResponse) => Promise<boolean>;
 
 export function createHooksRequestHandler(
@@ -72,26 +145,30 @@ export function createHooksRequestHandler(
   const { getHooksConfig, bindHost, port, logHooks, dispatchAgentHook, dispatchWakeHook } = opts;
   return async (req, res) => {
     const hooksConfig = getHooksConfig();
-    if (!hooksConfig) return false;
+    if (!hooksConfig) {
+      return false;
+    }
     const url = new URL(req.url ?? "/", `http://${bindHost}:${port}`);
     const basePath = hooksConfig.basePath;
     if (url.pathname !== basePath && !url.pathname.startsWith(`${basePath}/`)) {
       return false;
     }
 
-    const { token, fromQuery } = extractHookToken(req, url);
+    if (url.searchParams.has("token")) {
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.end(
+        "Hook token must be provided via Authorization: Bearer <token> or X-OpenClaw-Token header (query parameters are not allowed).",
+      );
+      return true;
+    }
+
+    const token = extractHookToken(req);
     if (!token || token !== hooksConfig.token) {
       res.statusCode = 401;
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.end("Unauthorized");
       return true;
-    }
-    if (fromQuery) {
-      logHooks.warn(
-        "Hook token provided via query parameter is deprecated for security reasons. " +
-          "Tokens in URLs appear in logs, browser history, and referrer headers. " +
-          "Use Authorization: Bearer <token> or X-OpenClaw-Token header instead.",
-      );
     }
 
     if (req.method !== "POST") {
@@ -137,7 +214,14 @@ export function createHooksRequestHandler(
         sendJson(res, 400, { ok: false, error: normalized.error });
         return true;
       }
-      const runId = dispatchAgentHook(normalized.value);
+      if (!isHookAgentAllowed(hooksConfig, normalized.value.agentId)) {
+        sendJson(res, 400, { ok: false, error: getHookAgentPolicyError() });
+        return true;
+      }
+      const runId = dispatchAgentHook({
+        ...normalized.value,
+        agentId: resolveHookTargetAgentId(hooksConfig, normalized.value.agentId),
+      });
       sendJson(res, 202, { ok: true, runId });
       return true;
     }
@@ -173,9 +257,14 @@ export function createHooksRequestHandler(
             sendJson(res, 400, { ok: false, error: getHookChannelError() });
             return true;
           }
+          if (!isHookAgentAllowed(hooksConfig, mapped.action.agentId)) {
+            sendJson(res, 400, { ok: false, error: getHookAgentPolicyError() });
+            return true;
+          }
           const runId = dispatchAgentHook({
             message: mapped.action.message,
             name: mapped.action.name ?? "Hook",
+            agentId: resolveHookTargetAgentId(hooksConfig, mapped.action.agentId),
             wakeMode: mapped.action.wakeMode,
             sessionKey: mapped.action.sessionKey ?? "",
             deliver: resolveHookDeliver(mapped.action.deliver),
@@ -205,20 +294,24 @@ export function createHooksRequestHandler(
 
 export function createGatewayHttpServer(opts: {
   canvasHost: CanvasHostHandler | null;
+  clients: Set<GatewayWsClient>;
   controlUiEnabled: boolean;
   controlUiBasePath: string;
+  controlUiRoot?: ControlUiRootState;
   openAiChatCompletionsEnabled: boolean;
   openResponsesEnabled: boolean;
   openResponsesConfig?: import("../config/types.gateway.js").GatewayHttpResponsesConfig;
   handleHooksRequest: HooksRequestHandler;
   handlePluginRequest?: HooksRequestHandler;
-  resolvedAuth: import("./auth.js").ResolvedGatewayAuth;
+  resolvedAuth: ResolvedGatewayAuth;
   tlsOptions?: TlsOptions;
 }): HttpServer {
   const {
     canvasHost,
+    clients,
     controlUiEnabled,
     controlUiBasePath,
+    controlUiRoot,
     openAiChatCompletionsEnabled,
     openResponsesEnabled,
     openResponsesConfig,
@@ -236,7 +329,9 @@ export function createGatewayHttpServer(opts: {
 
   async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     // Don't interfere with WebSocket upgrades; ws handles the 'upgrade' event.
-    if (String(req.headers.upgrade ?? "").toLowerCase() === "websocket") return;
+    if (String(req.headers.upgrade ?? "").toLowerCase() === "websocket") {
+      return;
+    }
 
     try {
       const configSnapshot = loadConfig();
@@ -253,23 +348,31 @@ export function createGatewayHttpServer(opts: {
           );
         }
       }
-      if (await handleHooksRequest(req, res)) return;
+      if (await handleHooksRequest(req, res)) {
+        return;
+      }
       if (
         await handleMemoryHttpRequest(req, res, {
           auth: resolvedAuth,
           trustedProxies,
         })
-      )
+      ) {
         return;
+      }
       if (
         await handleToolsInvokeHttpRequest(req, res, {
           auth: resolvedAuth,
           trustedProxies,
         })
-      )
+      ) {
         return;
-      if (await handleSlackHttpRequest(req, res)) return;
-      if (handlePluginRequest && (await handlePluginRequest(req, res))) return;
+      }
+      if (await handleSlackHttpRequest(req, res)) {
+        return;
+      }
+      if (handlePluginRequest && (await handlePluginRequest(req, res))) {
+        return;
+      }
       if (openResponsesEnabled) {
         if (
           await handleOpenResponsesHttpRequest(req, res, {
@@ -277,8 +380,9 @@ export function createGatewayHttpServer(opts: {
             config: openResponsesConfig,
             trustedProxies,
           })
-        )
+        ) {
           return;
+        }
       }
       if (openAiChatCompletionsEnabled) {
         if (
@@ -286,12 +390,30 @@ export function createGatewayHttpServer(opts: {
             auth: resolvedAuth,
             trustedProxies,
           })
-        )
+        ) {
           return;
+        }
       }
       if (canvasHost) {
-        if (await handleA2uiHttpRequest(req, res)) return;
-        if (await canvasHost.handleHttpRequest(req, res)) return;
+        const url = new URL(req.url ?? "/", "http://localhost");
+        if (isCanvasPath(url.pathname)) {
+          const ok = await authorizeCanvasRequest({
+            req,
+            auth: resolvedAuth,
+            trustedProxies,
+            clients,
+          });
+          if (!ok) {
+            sendUnauthorized(res);
+            return;
+          }
+        }
+        if (await handleA2uiHttpRequest(req, res)) {
+          return;
+        }
+        if (await canvasHost.handleHttpRequest(req, res)) {
+          return;
+        }
       }
       if (controlUiEnabled) {
         if (
@@ -299,15 +421,18 @@ export function createGatewayHttpServer(opts: {
             basePath: controlUiBasePath,
             resolveAvatar: (agentId) => resolveAgentAvatar(configSnapshot, agentId),
           })
-        )
+        ) {
           return;
+        }
         if (
           handleControlUiHttpRequest(req, res, {
             basePath: controlUiBasePath,
             config: configSnapshot,
+            root: controlUiRoot,
           })
-        )
+        ) {
           return;
+        }
       }
 
       res.statusCode = 404;
@@ -327,12 +452,38 @@ export function attachGatewayUpgradeHandler(opts: {
   httpServer: HttpServer;
   wss: WebSocketServer;
   canvasHost: CanvasHostHandler | null;
+  clients: Set<GatewayWsClient>;
+  resolvedAuth: ResolvedGatewayAuth;
 }) {
-  const { httpServer, wss, canvasHost } = opts;
+  const { httpServer, wss, canvasHost, clients, resolvedAuth } = opts;
   httpServer.on("upgrade", (req, socket, head) => {
-    if (canvasHost?.handleUpgrade(req, socket, head)) return;
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit("connection", ws, req);
+    void (async () => {
+      if (canvasHost) {
+        const url = new URL(req.url ?? "/", "http://localhost");
+        if (url.pathname === CANVAS_WS_PATH) {
+          const configSnapshot = loadConfig();
+          const trustedProxies = configSnapshot.gateway?.trustedProxies ?? [];
+          const ok = await authorizeCanvasRequest({
+            req,
+            auth: resolvedAuth,
+            trustedProxies,
+            clients,
+          });
+          if (!ok) {
+            socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+            socket.destroy();
+            return;
+          }
+        }
+        if (canvasHost.handleUpgrade(req, socket, head)) {
+          return;
+        }
+      }
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        wss.emit("connection", ws, req);
+      });
+    })().catch(() => {
+      socket.destroy();
     });
   });
 }
