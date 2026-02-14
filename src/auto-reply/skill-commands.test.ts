@@ -55,6 +55,72 @@ describe("resolveSkillCommandInvocation", () => {
     });
     expect(invocation).toBeNull();
   });
+
+  describe("alias matching", () => {
+    it("matches skill by alias", () => {
+      const invocation = resolveSkillCommandInvocation({
+        commandBodyNormalized: "/wf build an API",
+        skillCommands: [
+          {
+            name: "multi_agent_workflow",
+            skillName: "multi-agent-workflow",
+            description: "Multi-agent workflow",
+            aliases: ["workflow", "wf", "dev-cycle"],
+          },
+        ],
+      });
+      expect(invocation?.command.skillName).toBe("multi-agent-workflow");
+      expect(invocation?.args).toBe("build an API");
+    });
+
+    it("matches normalized alias", () => {
+      const invocation = resolveSkillCommandInvocation({
+        commandBodyNormalized: "/skill dev-cycle start",
+        skillCommands: [
+          {
+            name: "multi_agent_workflow",
+            skillName: "multi-agent-workflow",
+            description: "Multi-agent workflow",
+            aliases: ["dev_cycle", "dev-cycle"],
+          },
+        ],
+      });
+      expect(invocation?.command.skillName).toBe("multi-agent-workflow");
+    });
+
+    it("matches alias via /skill command", () => {
+      const invocation = resolveSkillCommandInvocation({
+        commandBodyNormalized: "/skill workflow do something",
+        skillCommands: [
+          {
+            name: "multi_agent_workflow",
+            skillName: "multi-agent-workflow",
+            description: "Multi-agent workflow",
+            aliases: ["workflow", "wf"],
+          },
+        ],
+      });
+      expect(invocation?.command.name).toBe("multi_agent_workflow");
+      expect(invocation?.args).toBe("do something");
+    });
+
+    it("prefers name match over alias", () => {
+      const invocation = resolveSkillCommandInvocation({
+        commandBodyNormalized: "/workflow args",
+        skillCommands: [
+          { name: "workflow", skillName: "workflow-skill", description: "Direct match" },
+          {
+            name: "multi_agent_workflow",
+            skillName: "multi-agent-workflow",
+            description: "Alias match",
+            aliases: ["workflow"],
+          },
+        ],
+      });
+      // Should match the first one by name
+      expect(invocation?.command.skillName).toBe("workflow-skill");
+    });
+  });
 });
 
 describe("listSkillCommandsForAgents", () => {

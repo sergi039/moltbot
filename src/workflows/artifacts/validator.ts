@@ -15,6 +15,7 @@ import type {
   ValidationResult,
 } from "../types.js";
 import { loadArtifactJson, artifactExists } from "./store.js";
+import { DEFAULT_MAX_TASKS } from "../constants.js";
 
 // ============================================================================
 // Validation Result Builder
@@ -46,6 +47,7 @@ export async function validatePhaseOutput(
   runId: string,
   phase: PhaseDefinition,
   iteration: number,
+  options?: { maxTasks?: number },
 ): Promise<ValidationResult> {
   const result = createValidationResult();
 
@@ -65,7 +67,9 @@ export async function validatePhaseOutput(
   // 2. Validate specific artifact schemas
   for (const artifactName of phase.outputArtifacts) {
     if (artifactName === "tasks.json") {
-      const taskValidation = await validateTaskList(runId, phase.id, iteration);
+      const taskValidation = await validateTaskList(runId, phase.id, iteration, {
+        maxTasks: options?.maxTasks,
+      });
       if (!taskValidation.valid) {
         result.valid = false;
         result.errors.push(...taskValidation.errors);
@@ -98,6 +102,7 @@ export async function validateTaskList(
   runId: string,
   phaseId: string,
   iteration: number,
+  options?: { maxTasks?: number },
 ): Promise<ValidationResult> {
   const result = createValidationResult();
 
@@ -119,6 +124,17 @@ export async function validateTaskList(
 
   if (!Array.isArray(taskList.tasks)) {
     addError(result, "tasks.json: 'tasks' must be an array");
+    return result;
+  }
+
+  // ========== ANTI-LOOP: Check maxTasks limit ==========
+  const maxTasks = options?.maxTasks ?? DEFAULT_MAX_TASKS;
+  if (taskList.tasks.length > maxTasks) {
+    addError(
+      result,
+      `tasks.json: exceeds maxTasks limit (${taskList.tasks.length} > ${maxTasks}). ` +
+        `This prevents runaway task generation. Increase maxTasks in workflow settings if needed.`,
+    );
     return result;
   }
 

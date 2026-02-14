@@ -101,6 +101,10 @@ export interface WorkflowSettings {
   maxDurationMs: number;
   /** Max iterations for review loop */
   maxReviewIterations: number;
+  /** Max tasks allowed in tasks.json (prevents runaway task generation) */
+  maxTasks: number;
+  /** Max agent runs per workflow (prevents token drain) */
+  maxAgentRuns: number;
   /** Auto-commit after each phase */
   autoCommit: boolean;
   /** Notify user between phases */
@@ -207,6 +211,14 @@ export interface WorkflowRun {
 
   /** Error if failed */
   error?: WorkflowError;
+
+  /** Resume/retry tracking */
+  retryCount?: number;
+  maxRetries?: number;
+  resumedAt?: number;
+
+  /** Agent run counter (for token drain protection) */
+  agentRunCount?: number;
 
   /** Final output location */
   outputPath?: string;
@@ -464,6 +476,10 @@ export interface RetentionConfig {
   logRetentionDays: number;
   failedLogRetentionDays: number;
   artifactRetentionDays: number;
+  /** Enable automatic cleanup on startup and at intervals */
+  autoCleanup?: boolean;
+  /** Interval in minutes between auto-cleanup runs */
+  cleanupIntervalMinutes?: number;
 }
 
 // ============================================================================

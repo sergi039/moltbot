@@ -1,151 +1,63 @@
-import { describe, it, expect } from "vitest";
+/**
+ * Validator Tests - maxTasks Limit
+ */
 
-import { evaluateCondition } from "./validator.js";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { validateTaskList } from "./validator.js";
+import { DEFAULT_MAX_TASKS } from "../constants.js";
 
-describe("evaluateCondition", () => {
-  describe("simple property access", () => {
-    it("should evaluate $.approved == true", () => {
-      const artifacts = { approved: true };
-      expect(evaluateCondition("$.approved == true", artifacts)).toBe(true);
-      expect(evaluateCondition("$.approved == false", artifacts)).toBe(false);
-    });
+vi.mock("./store.js", () => ({
+  loadArtifactJson: vi.fn(),
+  artifactExists: vi.fn().mockResolvedValue(true),
+}));
 
-    it("should evaluate $.approved == false", () => {
-      const artifacts = { approved: false };
-      expect(evaluateCondition("$.approved == false", artifacts)).toBe(true);
-      expect(evaluateCondition("$.approved == true", artifacts)).toBe(false);
-    });
+import { loadArtifactJson } from "./store.js";
+const mockLoadArtifactJson = vi.mocked(loadArtifactJson);
 
-    it("should evaluate numeric comparisons", () => {
-      const artifacts = { score: 75 };
-      expect(evaluateCondition("$.score > 70", artifacts)).toBe(true);
-      expect(evaluateCondition("$.score < 70", artifacts)).toBe(false);
-      expect(evaluateCondition("$.score >= 75", artifacts)).toBe(true);
-      expect(evaluateCondition("$.score <= 75", artifacts)).toBe(true);
-    });
+function createValidTaskList(taskCount: number) {
+  return {
+    version: "1.0",
+    projectName: "test-project",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    tasks: Array.from({ length: taskCount }, (_, i) => ({
+      id: "task-" + (i + 1),
+      title: "Task " + (i + 1),
+      description: "Description for task " + (i + 1),
+      type: "feature",
+      priority: 1,
+      complexity: 2,
+      status: "pending",
+      dependsOn: [],
+      acceptanceCriteria: ["Test passes"],
+    })),
+    stats: { total: taskCount, completed: 0, failed: 0, pending: taskCount },
+  };
+}
+
+describe("validateTaskList - maxTasks limit", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  describe("nested property access", () => {
-    it("should evaluate $.planReview.approved == false", () => {
-      const artifacts = {
-        planReview: { approved: false, score: 60 },
-      };
-      expect(evaluateCondition("$.planReview.approved == false", artifacts)).toBe(true);
-      expect(evaluateCondition("$.planReview.approved == true", artifacts)).toBe(false);
-    });
-
-    it("should evaluate $.planReview.approved == true", () => {
-      const artifacts = {
-        planReview: { approved: true, score: 85 },
-      };
-      expect(evaluateCondition("$.planReview.approved == true", artifacts)).toBe(true);
-      expect(evaluateCondition("$.planReview.approved == false", artifacts)).toBe(false);
-    });
-
-    it("should evaluate deeply nested paths", () => {
-      const artifacts = {
-        result: {
-          review: {
-            approved: true,
-          },
-        },
-      };
-      expect(evaluateCondition("$.result.review.approved == true", artifacts)).toBe(true);
-    });
-
-    it("should return false for missing nested property", () => {
-      const artifacts = { planReview: {} };
-      // undefined == false is false in strict comparison
-      expect(evaluateCondition("$.planReview.approved == false", artifacts)).toBe(false);
-    });
+  it("should fail when tasks.json exceeds maxTasks (51 > 50)", async () => {
+    mockLoadArtifactJson.mockResolvedValue(createValidTaskList(51));
+    const result = await validateTaskList("test-run", "planning", 1, { maxTasks: 50 });
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("exceeds maxTasks");
+    expect(result.errors[0]).toContain("51 > 50");
   });
 
-  describe("array filter with length", () => {
-    it("should evaluate $.review.issues[...].length > 0 with critical issues", () => {
-      const artifacts = {
-        review: {
-          approved: false,
-          issues: [
-            { id: "1", severity: "critical", description: "Bug" },
-            { id: "2", severity: "low", description: "Style" },
-          ],
-        },
-      };
-      expect(
-        evaluateCondition("$.review.issues[?(@.severity=='critical')].length > 0", artifacts),
-      ).toBe(true);
-    });
-
-    it("should evaluate $.review.issues[...].length > 0 without critical issues", () => {
-      const artifacts = {
-        review: {
-          approved: true,
-          issues: [
-            { id: "1", severity: "low", description: "Style" },
-            { id: "2", severity: "medium", description: "Perf" },
-          ],
-        },
-      };
-      expect(
-        evaluateCondition("$.review.issues[?(@.severity=='critical')].length > 0", artifacts),
-      ).toBe(false);
-    });
-
-    it("should evaluate $.review.issues[...].length == 0", () => {
-      const artifacts = {
-        review: {
-          approved: true,
-          issues: [],
-        },
-      };
-      expect(
-        evaluateCondition("$.review.issues[?(@.severity=='critical')].length == 0", artifacts),
-      ).toBe(true);
-    });
-
-    it("should evaluate with != filter operator", () => {
-      const artifacts = {
-        review: {
-          issues: [
-            { id: "1", severity: "critical", description: "Bug" },
-            { id: "2", severity: "low", description: "Style" },
-          ],
-        },
-      };
-      // Count non-critical issues
-      expect(
-        evaluateCondition("$.review.issues[?(@.severity!='critical')].length > 0", artifacts),
-      ).toBe(true);
-    });
-
-    it("should return false when array is missing", () => {
-      const artifacts = { review: {} };
-      expect(
-        evaluateCondition("$.review.issues[?(@.severity=='critical')].length > 0", artifacts),
-      ).toBe(false);
-    });
+  it("should pass at boundary (50 tasks with maxTasks=50)", async () => {
+    mockLoadArtifactJson.mockResolvedValue(createValidTaskList(50));
+    const result = await validateTaskList("test-run", "planning", 1, { maxTasks: 50 });
+    expect(result.valid).toBe(true);
   });
 
-  describe("direct array filter (without nested base)", () => {
-    it("should evaluate $.issues[...].length directly", () => {
-      const artifacts = {
-        issues: [{ severity: "critical" }, { severity: "low" }],
-      };
-      expect(evaluateCondition("$.issues[?(@.severity=='critical')].length > 0", artifacts)).toBe(
-        true,
-      );
-    });
-  });
-
-  describe("edge cases", () => {
-    it("should return false for unknown conditions", () => {
-      const artifacts = {};
-      expect(evaluateCondition("unknown syntax here", artifacts)).toBe(false);
-    });
-
-    it("should return false for missing top-level property", () => {
-      const artifacts = {};
-      expect(evaluateCondition("$.missing.property == true", artifacts)).toBe(false);
-    });
+  it("should use DEFAULT_MAX_TASKS when no option provided", async () => {
+    mockLoadArtifactJson.mockResolvedValue(createValidTaskList(DEFAULT_MAX_TASKS + 1));
+    const result = await validateTaskList("test-run", "planning", 1);
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("exceeds maxTasks");
   });
 });

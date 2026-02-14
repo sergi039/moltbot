@@ -59,6 +59,22 @@ This page describes the current CLI behavior. If commands change, update this do
 - `--update`: shorthand for `openclaw update` (source installs only).
 - `-V`, `--version`, `-v`: print version and exit.
 
+## Deployment rules
+
+Production and development environments must be isolated:
+
+| Environment | State Directory | Repo Directory |
+|-------------|-----------------|----------------|
+| Production  | `~/.openclaw`   | `~/openclaw-prod` |
+| Development | `~/.openclaw-dev` | `~/moltbot` |
+
+**Key rules:**
+- Always specify `OPENCLAW_STATE_DIR` explicitly when running the gateway
+- Production repo must stay clean (no uncommitted changes)
+- Use `scripts/update-prod.sh` for production updates
+
+Full deployment guide: [Deployment Guide](/DEPLOYMENT)
+
 ## Output styling
 
 - ANSI colors and progress indicators only render in TTY sessions.
@@ -263,6 +279,8 @@ Vector search over `MEMORY.md` + `memory/*.md`:
 - `openclaw memory status` — show index stats.
 - `openclaw memory index` — reindex memory files.
 - `openclaw memory search "<query>"` — semantic search over memory.
+- Facts memory roadmap: [/memory/ROADMAP](/memory/ROADMAP)
+- Deployment rules (dev vs prod): [/DEPLOYMENT](/DEPLOYMENT)
 
 ## Chat slash commands
 

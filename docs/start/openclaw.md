@@ -103,6 +103,7 @@ openclaw setup
 
 Full workspace layout + backup guide: [Agent workspace](/concepts/agent-workspace)
 Memory workflow: [Memory](/concepts/memory)
+Deployment rules (dev vs prod): [/DEPLOYMENT](/DEPLOYMENT)
 
 Optional: choose a different workspace with `agents.defaults.workspace` (supports `~`).
 

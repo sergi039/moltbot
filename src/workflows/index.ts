@@ -92,7 +92,12 @@ export type {
 // Orchestrator
 // ============================================================================
 
-export { WorkflowOrchestrator, getOrchestrator, resetOrchestrator } from "./orchestrator.js";
+export {
+  WorkflowOrchestrator,
+  getOrchestrator,
+  getObservabilityAdapter,
+  resetOrchestrator,
+} from "./orchestrator.js";
 
 // ============================================================================
 // State Management
@@ -110,8 +115,14 @@ export {
   listRunningWorkflows,
   deleteWorkflow,
   cleanupOldWorkflows,
+  // Global event logging (for cleanup events)
+  logGlobalEvent,
+  getGlobalEvents,
+  type GlobalCleanupEvent,
   type WorkflowSummary,
-  type CleanupResult,
+  // Note: CleanupResult from retention is the comprehensive one
+  // This simpler one is for legacy cleanupOldWorkflows
+  type CleanupResult as LegacyCleanupResult,
 } from "./state/persistence.js";
 
 export {
@@ -178,6 +189,18 @@ export {
 // ============================================================================
 
 export { createHandoffPackage, loadHandoffContext, type HandoffPackage } from "./agents/handoff.js";
+
+// ============================================================================
+// Intent Router
+// ============================================================================
+
+export {
+  detectWorkflowIntent,
+  isWorkflowIntent,
+  suggestWorkflowCommand,
+  type WorkflowIntentType,
+  type WorkflowIntentResult,
+} from "./intent-router.js";
 
 // ============================================================================
 // Engines
@@ -274,7 +297,75 @@ export {
   PHASE_EXECUTION,
   PHASE_CODE_REVIEW,
   PHASE_FINALIZE,
+
+  // Intent Routing
+  DEFAULT_INTENT_MIN_CONFIDENCE,
+  DEFAULT_INTENT_ROUTING_ENABLED,
+  DEFAULT_INTENT_AUTO_START,
 } from "./constants.js";
+
+// ============================================================================
+// Retention
+// ============================================================================
+
+export {
+  // Types
+  type CleanupReason,
+  type CleanupReasonDetail,
+  type CleanupCandidate,
+  type CleanupResult,
+  type CleanupCandidateResult,
+  type CleanupError,
+  type CleanupSummary,
+  type CleanupOptions,
+  type RetentionConfigForCleanup,
+  type LogRotationOptions,
+  type LogRotationResult,
+  DEFAULT_LOG_ROTATION_OPTIONS,
+
+  // Functions
+  runCleanup,
+  findCleanupCandidates,
+  getCleanupCandidates,
+  getTotalDiskUsage,
+  formatBytes,
+  formatAge,
+  formatCandidatesPreview,
+  formatCleanupResult,
+  formatDiskUsageReport,
+  formatCleanupResultJson,
+  formatCandidatesJson,
+} from "./retention/index.js";
+
+// ============================================================================
+// Observability
+// ============================================================================
+
+export {
+  // Types - note: WorkflowEventType here is for observability events (workflow.start, etc.)
+  // Different from orchestrator's WorkflowEventType (workflow:started, etc.) exported above
+  type WorkflowEventType as ObservabilityEventType,
+  type WorkflowEventBase,
+  type WorkflowRunSummary,
+  type IWorkflowLogger,
+} from "./observability/types.js";
+
+export {
+  // Adapter
+  ObservabilityAdapter,
+  attachObservability,
+  type ObservabilityAdapterOptions,
+  type AttachObservabilityOptions,
+} from "./observability/adapter.js";
+
+export {
+  // Logger
+  WorkflowLogger,
+  createWorkflowLogger,
+  loadRunSummary,
+  loadRunEvents,
+  type WorkflowLoggerOptions,
+} from "./observability/logger.js";
 
 // ============================================================================
 // Workflow Definitions
@@ -285,6 +376,8 @@ import { WorkflowOrchestrator } from "./orchestrator.js";
 import {
   DEFAULT_WORKFLOW_TIMEOUT_MS,
   DEFAULT_MAX_REVIEW_ITERATIONS,
+  DEFAULT_MAX_TASKS,
+  DEFAULT_MAX_AGENT_RUNS,
   PLAN_FILE,
   TASKS_FILE,
   REVIEW_FILE,
@@ -318,7 +411,7 @@ export const DEV_CYCLE_WORKFLOW: WorkflowDefinition = {
       engine: "planner",
       agent: {
         type: "claude",
-        model: "claude-sonnet-4",
+        model: "claude-sonnet-4-5",
       },
       inputArtifacts: [],
       outputArtifacts: [PLAN_FILE, TASKS_FILE],
@@ -336,7 +429,7 @@ export const DEV_CYCLE_WORKFLOW: WorkflowDefinition = {
         flags: ["--full-auto"],
       },
       inputArtifacts: [PLAN_FILE, TASKS_FILE],
-      outputArtifacts: ["plan-review.json"],
+      outputArtifacts: [REVIEW_FILE, RECOMMENDATIONS_FILE],
       settings: {
         timeoutMs: 180000, // 3 min
         retries: 1,
@@ -354,7 +447,7 @@ export const DEV_CYCLE_WORKFLOW: WorkflowDefinition = {
       engine: "executor",
       agent: {
         type: "claude",
-        model: "claude-sonnet-4",
+        model: "claude-sonnet-4-5",
       },
       inputArtifacts: [TASKS_FILE],
       outputArtifacts: [TASKS_FILE, EXECUTION_REPORT_FILE],
@@ -403,6 +496,8 @@ export const DEV_CYCLE_WORKFLOW: WorkflowDefinition = {
   settings: {
     maxDurationMs: DEFAULT_WORKFLOW_TIMEOUT_MS,
     maxReviewIterations: DEFAULT_MAX_REVIEW_ITERATIONS,
+    maxTasks: DEFAULT_MAX_TASKS,
+    maxAgentRuns: DEFAULT_MAX_AGENT_RUNS,
     autoCommit: false,
     notifyOnPhaseComplete: true,
   },
@@ -445,6 +540,8 @@ export const REVIEW_ONLY_WORKFLOW: WorkflowDefinition = {
   settings: {
     maxDurationMs: 600000, // 10 min
     maxReviewIterations: 1,
+    maxTasks: DEFAULT_MAX_TASKS,
+    maxAgentRuns: DEFAULT_MAX_AGENT_RUNS,
     autoCommit: false,
     notifyOnPhaseComplete: true,
   },

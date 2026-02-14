@@ -8,7 +8,7 @@
 import type { WorkflowLogger } from "../observability/logger.js";
 import type { IPolicyEngine, WorkflowPolicy } from "./types.js";
 import { PolicyEngine, createPolicyEngine } from "./engine.js";
-import { CliApprovalPrompt } from "./prompt.js";
+import { CliApprovalPrompt, AutoApprovePrompt } from "./prompt.js";
 import { createApprovalStore, type IApprovalStore } from "./store.js";
 import { DEFAULT_WORKFLOW_POLICY } from "./defaults.js";
 import type { ApprovalEventLogger } from "../engines/runner.js";
@@ -41,6 +41,9 @@ export interface PolicyRuntimeOptions {
 
   /** Enable CLI prompts (false for non-interactive mode) */
   interactive?: boolean;
+
+  /** Auto-approve all prompts (for testing/non-interactive CI) */
+  autoApprove?: boolean;
 }
 
 /**
@@ -90,40 +93,70 @@ export function createPolicyRuntime(options: PolicyRuntimeOptions): PolicyRuntim
     baseDir: options.storageBasePath,
   });
 
-  // Create approval prompt (CLI or auto based on interactive flag)
-  const approvalPrompt =
-    options.interactive !== false
-      ? new CliApprovalPrompt({
-          timeoutMs: approvalTimeoutMs,
-          showRisk: true,
-          showCountdown: true,
-          // Connect to logger for request events
-          onApprovalRequested: (request, risk) => {
-            options.logger?.logEvent({
-              runId: options.runId,
-              phaseId: request.phaseId,
-              type: "policy.prompt",
-              payload: {
-                requestId: request.id,
-                actionType: request.action.actionType,
-                riskLevel: risk.level,
-                riskScore: risk.score,
-                reason: request.reason,
-              },
-            });
+  // Create approval prompt based on mode:
+  // - autoApprove=true: use AutoApprovePrompt (for testing/CI)
+  // - interactive=true: use CliApprovalPrompt (default)
+  // - interactive=false: no prompt (auto-deny)
+  let approvalPrompt;
+  if (options.autoApprove) {
+    approvalPrompt = new AutoApprovePrompt({ decision: "approved" });
+    // Log auto-approvals
+    const originalPrompt = approvalPrompt.prompt.bind(approvalPrompt);
+    approvalPrompt.prompt = async (request) => {
+      options.logger?.logEvent({
+        runId: options.runId,
+        phaseId: request.phaseId,
+        type: "policy.auto_approve",
+        payload: {
+          requestId: request.id,
+          actionType: request.action.actionType,
+          reason: request.reason,
+        },
+      });
+      const result = await originalPrompt(request);
+      options.logger?.logApproval(
+        request.phaseId,
+        request.id,
+        request.action.actionType,
+        result.decision,
+        result.remember,
+      );
+      return result;
+    };
+  } else if (options.interactive !== false) {
+    approvalPrompt = new CliApprovalPrompt({
+      timeoutMs: approvalTimeoutMs,
+      showRisk: true,
+      showCountdown: true,
+      // Connect to logger for request events
+      onApprovalRequested: (request, risk) => {
+        options.logger?.logEvent({
+          runId: options.runId,
+          phaseId: request.phaseId,
+          type: "policy.prompt",
+          payload: {
+            requestId: request.id,
+            actionType: request.action.actionType,
+            riskLevel: risk.level,
+            riskScore: risk.score,
+            reason: request.reason,
           },
-          // Connect to logger for decision events
-          onDecisionMade: (record) => {
-            options.logger?.logApproval(
-              record.request.phaseId,
-              record.request.id,
-              record.request.action.actionType,
-              record.decision,
-              record.remember,
-            );
-          },
-        })
-      : undefined;
+        });
+      },
+      // Connect to logger for decision events
+      onDecisionMade: (record) => {
+        options.logger?.logApproval(
+          record.request.phaseId,
+          record.request.id,
+          record.request.action.actionType,
+          record.decision,
+          record.remember,
+        );
+      },
+    });
+  } else {
+    approvalPrompt = undefined;
+  }
 
   // Create policy engine
   const engine = createPolicyEngine({

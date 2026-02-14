@@ -16,6 +16,7 @@ vi.mock("./state/persistence.js", () => ({
   saveWorkflowInput: vi.fn().mockResolvedValue(undefined),
   logWorkflowEvent: vi.fn().mockResolvedValue(undefined),
   getWorkflowDir: vi.fn().mockReturnValue("/tmp/test-workflow"),
+  getPhaseDir: vi.fn().mockReturnValue("/tmp/test-workflow/phases/1-planning"),
   listRunningWorkflows: vi.fn().mockResolvedValue([]),
   getWorkflowStoragePath: vi.fn().mockReturnValue("/tmp/workflows"),
 }));
@@ -66,6 +67,17 @@ vi.mock("./observability/adapter.js", () => ({
 vi.mock("./retention/scheduler.js", () => ({
   startCleanupScheduler: vi.fn().mockResolvedValue(undefined),
   stopCleanupScheduler: vi.fn(),
+}));
+
+// Mock policy runtime (needed for live mode tests)
+vi.mock("./policy/runtime.js", () => ({
+  createPolicyRuntime: vi.fn().mockReturnValue({
+    engine: undefined,
+    policy: undefined,
+    approvalTimeoutMs: 60000,
+    onApprovalEvent: vi.fn(),
+  }),
+  DEFAULT_APPROVAL_TIMEOUT_MS: 60000,
 }));
 
 describe("WorkflowOrchestrator - Anti-Loop Limits", () => {

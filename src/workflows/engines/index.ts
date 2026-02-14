@@ -22,11 +22,20 @@ export type {
 } from "./types.js";
 
 // Runner types and implementations
-export type { EngineAgentRunner, EngineAgentRunParams, EngineAgentRunResult } from "./runner.js";
+export type {
+  EngineAgentRunner,
+  EngineAgentRunParams,
+  EngineAgentRunResult,
+  PolicyAwareRunnerOptions,
+  LiveRunnerOptions,
+  CreateRunnerOptions,
+} from "./runner.js";
 export {
   StubRunner,
   LiveRunner,
+  PolicyAwareRunner,
   createRunner,
+  createPolicyAwareRunner,
   generateSessionId,
   mapAgentConfigToRunnerParams,
 } from "./runner.js";

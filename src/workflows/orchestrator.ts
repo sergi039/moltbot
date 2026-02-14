@@ -6,6 +6,7 @@
  */
 
 import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { EventEmitter } from "node:events";
 
 import type {
@@ -19,7 +20,12 @@ import type {
   WorkspaceConfig,
 } from "./types.js";
 
-import { generateWorkflowId, PERSISTENCE_EVENTS } from "./constants.js";
+import {
+  generateWorkflowId,
+  PERSISTENCE_EVENTS,
+  WORKSPACE_DIR,
+  DEFAULT_MAX_AGENT_RUNS,
+} from "./constants.js";
 
 import {
   saveWorkflowState,
@@ -27,11 +33,29 @@ import {
   saveWorkflowInput,
   logWorkflowEvent,
   getWorkflowDir,
+  getPhaseDir,
   listRunningWorkflows,
 } from "./state/persistence.js";
 
 import { validatePhaseOutput, evaluateCondition } from "./artifacts/validator.js";
-import { loadArtifactJson, generateManifest } from "./artifacts/store.js";
+import { loadArtifactJson, generateManifest, getArtifactsDir } from "./artifacts/store.js";
+import { attachObservability, type ObservabilityAdapter } from "./observability/adapter.js";
+import { loadConfig } from "../config/io.js";
+import { DEFAULT_LOG_ROTATION_OPTIONS, type LogRotationOptions } from "./retention/types.js";
+import { startCleanupScheduler, stopCleanupScheduler } from "./retention/scheduler.js";
+import { startMemoryScheduler, stopMemoryScheduler } from "../memory/facts/scheduler.js";
+import {
+  DEFAULT_RETENTION_CONFIG,
+  DEFAULT_CLEANUP_INTERVAL_MINUTES,
+  DEFAULT_MAX_RETRIES,
+} from "./constants.js";
+import { getEngine, type EngineContext } from "./engines/index.js";
+import {
+  createPolicyRuntime,
+  DEFAULT_APPROVAL_TIMEOUT_MS,
+  type PolicyRuntime,
+} from "./policy/runtime.js";
+import { getWorkflowStoragePath } from "./state/persistence.js";
 
 // ============================================================================
 // Orchestrator Class
@@ -205,17 +229,41 @@ export class WorkflowOrchestrator extends EventEmitter {
       throw new Error(`Workflow not found: ${runId}`);
     }
 
-    if (run.status !== "paused") {
+    // Allow resume from paused or failed states
+    if (run.status !== "paused" && run.status !== "failed") {
       throw new Error(`Cannot resume workflow in status: ${run.status}`);
     }
 
+    // Save previous status before changing it
+    const previousStatus = run.status;
+
+    // Check max retries for failed workflows
+    const maxRetries = run.maxRetries ?? DEFAULT_MAX_RETRIES;
+    const currentRetries = run.retryCount ?? 0;
+
+    if (previousStatus === "failed") {
+      if (currentRetries >= maxRetries) {
+        throw new Error(
+          `Maximum retries (${maxRetries}) exceeded for workflow ${runId}. ` +
+            `Last error: ${run.error?.message || "unknown"}`,
+        );
+      }
+      run.retryCount = currentRetries + 1;
+    }
+
     run.status = "running";
+    run.resumedAt = Date.now();
     await this.saveAndPersist(run);
 
     await this.emitEvent({
       type: "workflow:resumed",
       workflowId: run.id,
       timestamp: Date.now(),
+      data: {
+        previousStatus,
+        retryCount: run.retryCount,
+        maxRetries,
+      },
     });
 
     // Continue execution
@@ -258,10 +306,34 @@ export class WorkflowOrchestrator extends EventEmitter {
       if (currentPhaseIndex === -1) currentPhaseIndex = 0;
     }
 
+    // Get workflow start time for timeout enforcement
+    const workflowStartTime = run.startedAt ?? Date.now();
+    const maxDurationMs = definition.settings.maxDurationMs;
+
     while (currentPhaseIndex < definition.phases.length) {
       // Check for pause
       if (run.status === "paused") {
         return;
+      }
+
+      // ========== ANTI-LOOP: Enforce maxDurationMs ==========
+      const elapsedMs = Date.now() - workflowStartTime;
+      if (elapsedMs > maxDurationMs) {
+        throw new Error(
+          `Workflow timeout: exceeded maxDurationMs (${maxDurationMs}ms). ` +
+            `Elapsed: ${elapsedMs}ms. Phase: ${run.currentPhase || "unknown"}`,
+        );
+      }
+
+      // ========== ANTI-LOOP: Check agent run limit ==========
+      const maxAgentRuns = definition.settings.maxAgentRuns ?? DEFAULT_MAX_AGENT_RUNS;
+      const currentAgentRuns = run.agentRunCount ?? 0;
+      if (currentAgentRuns >= maxAgentRuns) {
+        throw new Error(
+          `Agent run limit exceeded: ${currentAgentRuns}/${maxAgentRuns} runs. ` +
+            `This prevents excessive token consumption. ` +
+            `Increase maxAgentRuns in workflow settings if needed.`,
+        );
       }
 
       const phase = definition.phases[currentPhaseIndex];
@@ -275,8 +347,10 @@ export class WorkflowOrchestrator extends EventEmitter {
         );
       }
 
-      // Execute phase
-      const execution = await this.executePhase(run, phase, phaseIterations + 1);
+      // Execute phase (pass maxTasks from definition settings)
+      const execution = await this.executePhase(run, phase, phaseIterations + 1, {
+        maxTasks: definition.settings.maxTasks,
+      });
       run.phaseHistory.push(execution);
       run.iterationCount++;
 
@@ -330,6 +404,7 @@ export class WorkflowOrchestrator extends EventEmitter {
     run: WorkflowRun,
     phase: PhaseDefinition,
     iteration: number,
+    options?: { maxTasks?: number },
   ): Promise<PhaseExecution> {
     const execution: PhaseExecution = {
       phaseId: phase.id,
@@ -358,8 +433,10 @@ export class WorkflowOrchestrator extends EventEmitter {
       // TODO: Implement agent execution via engines
       await this.runPhaseEngine(run, phase, iteration);
 
-      // Validate output
-      const validation = await validatePhaseOutput(run.id, phase, iteration);
+      // Validate output (pass maxTasks for task list validation)
+      const validation = await validatePhaseOutput(run.id, phase, iteration, {
+        maxTasks: options?.maxTasks,
+      });
       if (!validation.valid) {
         throw new Error(`Phase validation failed: ${validation.errors.join(", ")}`);
       }
@@ -394,33 +471,112 @@ export class WorkflowOrchestrator extends EventEmitter {
   }
 
   private async runPhaseEngine(
-    _run: WorkflowRun,
+    run: WorkflowRun,
     phase: PhaseDefinition,
-    _iteration: number,
+    iteration: number,
   ): Promise<void> {
-    // TODO: Implement engine dispatch
-    // For now, this is a placeholder that will be filled in Phase 2 & 3
+    // Get the appropriate engine
+    const engine = getEngine(phase.engine);
 
-    switch (phase.engine) {
-      case "planner":
-        // Will call planner engine
-        console.log(`[workflows] Running planner engine for phase ${phase.id}`);
-        break;
+    // Check if live mode is enabled
+    const inputContext = run.input.context as Record<string, unknown> | undefined;
+    const isLive = inputContext?.live === true;
+    const autoApprove = inputContext?.autoApprove === true;
 
-      case "executor":
-        // Will call executor engine
-        console.log(`[workflows] Running executor engine for phase ${phase.id}`);
-        break;
+    // Build workflow/phase/artifacts directories
+    const workflowDir = getWorkflowDir(run.id);
+    const phaseDir = getPhaseDir(run.id, phase.id, iteration);
+    const artifactsDir = getArtifactsDir(run.id, phase.id, iteration);
 
-      case "reviewer":
-        // Will call reviewer engine
-        console.log(`[workflows] Running reviewer engine for phase ${phase.id}`);
-        break;
+    // Compute actual workspace path based on workspace mode
+    // - "in-place": use original repo path
+    // - "worktree" or "copy": workspace is under workflow directory
+    const workspacePath =
+      run.workspace.mode === "worktree" || run.workspace.mode === "copy"
+        ? join(workflowDir, WORKSPACE_DIR)
+        : run.workspace.targetRepo;
 
-      default: {
-        const _exhaustive: never = phase.engine;
-        throw new Error(`Unknown engine type: ${_exhaustive as string}`);
-      }
+    // Build policy runtime for live mode
+    let policyRuntime: PolicyRuntime | undefined;
+    if (isLive) {
+      const config = loadConfig();
+      const approvalTimeoutMs =
+        config.workflows?.policy?.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
+
+      // Get logger from observability adapter if available
+      const logger = observabilityAdapterInstance?.getLogger(run.id);
+
+      policyRuntime = createPolicyRuntime({
+        runId: run.id,
+        workspacePath,
+        storageBasePath: getWorkflowStoragePath(),
+        approvalTimeoutMs,
+        logger,
+        interactive: !autoApprove, // CLI runs are interactive unless auto-approve
+        autoApprove,
+      });
+    }
+
+    // Build engine context
+    const context: EngineContext = {
+      run,
+      phase,
+      iteration,
+      workflowDir,
+      phaseDir,
+      artifactsDir,
+      workspacePath,
+      // Policy runtime options (only set in live mode)
+      policyEngine: policyRuntime?.engine,
+      policy: policyRuntime?.policy,
+      approvalTimeoutMs: policyRuntime?.approvalTimeoutMs,
+      onApprovalEvent: policyRuntime?.onApprovalEvent,
+      onProgress: (update) => {
+        // Log progress via observability
+        const logger = observabilityAdapterInstance?.getLogger(run.id);
+        if (logger) {
+          // Map engine progress types to observability event types
+          const typeMap: Record<
+            string,
+            "agent.progress" | "artifact.save" | "task.start" | "task.complete" | "task.fail"
+          > = {
+            status: "agent.progress",
+            artifact: "artifact.save",
+            task: "task.start",
+            error: "task.fail",
+          };
+          const eventType = typeMap[update.type] ?? "agent.progress";
+
+          logger.logEvent({
+            runId: run.id,
+            phaseId: phase.id,
+            type: eventType,
+            payload: {
+              message: update.message,
+              ...update.data,
+            },
+          });
+        }
+      },
+    };
+
+    // Validate inputs
+    const validation = await engine.validateInputs(context);
+    if (!validation.valid) {
+      throw new Error(`Engine input validation failed: ${validation.errors.join(", ")}`);
+    }
+
+    // ========== ANTI-LOOP: Increment agent run counter (only in live mode) ==========
+    if (isLive) {
+      run.agentRunCount = (run.agentRunCount ?? 0) + 1;
+      await saveWorkflowState(run);
+    }
+
+    // Execute the engine
+    const result = await engine.execute(context);
+
+    if (!result.success) {
+      throw new Error(result.error || `Engine ${phase.engine} failed`);
     }
   }
 
@@ -543,14 +699,85 @@ function kebabToCamelCase(str: string): string {
 // ============================================================================
 
 let orchestratorInstance: WorkflowOrchestrator | null = null;
+let observabilityAdapterInstance: ObservabilityAdapter | null = null;
 
 export function getOrchestrator(): WorkflowOrchestrator {
   if (!orchestratorInstance) {
     orchestratorInstance = new WorkflowOrchestrator();
+
+    // Attach observability adapter with config-based settings
+    const config = loadConfig();
+    const logRotation = config.workflows?.retention?.logRotation;
+    const retention = config.workflows?.retention;
+
+    // Convert config logRotation to LogRotationOptions | null | undefined
+    let logRotationOptions: LogRotationOptions | null | undefined;
+    if (logRotation === null) {
+      // Explicitly disabled
+      logRotationOptions = null;
+    } else if (logRotation) {
+      // Custom options from config, fallback to defaults
+      logRotationOptions = {
+        maxSizeBytes: logRotation.maxSizeBytes ?? DEFAULT_LOG_ROTATION_OPTIONS.maxSizeBytes,
+        maxRotatedFiles:
+          logRotation.maxRotatedFiles ?? DEFAULT_LOG_ROTATION_OPTIONS.maxRotatedFiles,
+      };
+    }
+    // If undefined, adapter will use defaults
+
+    observabilityAdapterInstance = attachObservability(orchestratorInstance, {
+      enableRedaction: true,
+      logRotation: logRotationOptions,
+    });
+
+    // Start cleanup scheduler if autoCleanup is enabled
+    if (retention?.autoCleanup) {
+      startCleanupScheduler({
+        intervalMinutes: retention.cleanupIntervalMinutes ?? DEFAULT_CLEANUP_INTERVAL_MINUTES,
+        runImmediately: true,
+        retentionConfig: {
+          maxCompleted: retention.maxCompleted ?? DEFAULT_RETENTION_CONFIG.maxCompleted,
+          maxDiskPerWorkflowMb:
+            retention.maxDiskPerWorkflowMb ?? DEFAULT_RETENTION_CONFIG.maxDiskPerWorkflowMb,
+          maxTotalDiskGb: retention.maxTotalDiskGb ?? DEFAULT_RETENTION_CONFIG.maxTotalDiskGb,
+          logRetentionDays: retention.logRetentionDays ?? DEFAULT_RETENTION_CONFIG.logRetentionDays,
+          failedLogRetentionDays:
+            retention.failedLogRetentionDays ?? DEFAULT_RETENTION_CONFIG.failedLogRetentionDays,
+          artifactRetentionDays:
+            retention.artifactRetentionDays ?? DEFAULT_RETENTION_CONFIG.artifactRetentionDays,
+        },
+      }).catch((err) => {
+        console.error("[orchestrator] Failed to start cleanup scheduler:", err);
+      });
+    }
+
+    // Start memory scheduler if facts memory is enabled
+    const factsMemory = config.factsMemory;
+    if (factsMemory?.enabled && factsMemory?.scheduler) {
+      try {
+        startMemoryScheduler(config, factsMemory.scheduler);
+        console.log("[orchestrator] Memory scheduler started");
+      } catch (err) {
+        console.error("[orchestrator] Failed to start memory scheduler:", err);
+      }
+    }
   }
   return orchestratorInstance;
 }
 
+/**
+ * Get the observability adapter instance (if attached).
+ */
+export function getObservabilityAdapter(): ObservabilityAdapter | null {
+  return observabilityAdapterInstance;
+}
+
 export function resetOrchestrator(): void {
+  // Stop cleanup scheduler
+  stopCleanupScheduler();
+  // Stop memory scheduler
+  stopMemoryScheduler();
+
   orchestratorInstance = null;
+  observabilityAdapterInstance = null;
 }

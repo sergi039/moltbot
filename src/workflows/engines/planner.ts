@@ -17,9 +17,10 @@ import type {
   PlannerOutput,
   PlannerOptions,
 } from "./types.js";
-import type { TaskList, Task } from "../types.js";
+import type { TaskList, Task, PhaseDefinition } from "../types.js";
 import { saveArtifact } from "../artifacts/store.js";
 import { PLAN_FILE, TASKS_FILE } from "../constants.js";
+import { createHandoffPackage } from "../agents/handoff.js";
 import {
   type EngineAgentRunner,
   StubRunner,
@@ -260,14 +261,58 @@ export class PlannerEngine implements WorkflowEngine {
     const taskDescription = context.run.input.task;
     const projectName = (codebaseInfo.packageJson?.name as string) || "project";
 
+    // Create handoff package with context, instructions, and expectations
+    context.onProgress?.({
+      type: "status",
+      message: "Creating handoff package...",
+    });
+
+    const handoffPackage = await createHandoffPackage(
+      context.run,
+      context.phase,
+      context.iteration,
+      null, // planner is first phase, no previous phase
+    );
+
+    // Read handoff content for prompt inclusion
+    const [handoffContext, handoffInstructions, handoffExpectations] = await Promise.all([
+      readFile(handoffPackage.contextPath, "utf-8"),
+      readFile(handoffPackage.instructionsPath, "utf-8"),
+      readFile(handoffPackage.expectationsPath, "utf-8"),
+    ]);
+
+    context.onProgress?.({
+      type: "artifact",
+      message: "Handoff package created",
+      data: {
+        contextPath: handoffPackage.contextPath,
+        instructionsPath: handoffPackage.instructionsPath,
+        expectationsPath: handoffPackage.expectationsPath,
+      },
+    });
+
     // Use injected runner if available, otherwise create one for live mode
     const runner =
       this.runner instanceof StubRunner
-        ? createRunner({ live: true, artifactsDir: context.artifactsDir })
+        ? createRunner({
+            live: true,
+            phaseDir: context.phaseDir,
+            artifactsDir: context.artifactsDir,
+            policy: context.policy,
+            runId: context.run.id,
+            phaseId: context.phase.id,
+            policyEngine: context.policyEngine,
+            approvalTimeoutMs: context.approvalTimeoutMs,
+            onApprovalEvent: context.onApprovalEvent,
+          })
         : this.runner;
 
-    // Build prompt for planning
-    const prompt = this.buildPlanningPrompt(taskDescription, codebaseInfo);
+    // Build prompt for planning with handoff data
+    const prompt = this.buildPlanningPrompt(taskDescription, codebaseInfo, {
+      context: handoffContext,
+      instructions: handoffInstructions,
+      expectations: handoffExpectations,
+    });
 
     // Get agent config from phase
     const agentParams = mapAgentConfigToRunnerParams(context.phase.agent);
@@ -300,19 +345,74 @@ export class PlannerEngine implements WorkflowEngine {
       throw new Error(`Live planning failed: ${result.error}`);
     }
 
-    // Parse the agent output to extract plan and tasks
-    const { plan, tasks } = this.parseAgentOutput(result.output, projectName);
+    // Parse the agent output to extract plan and tasks (with 1 retry on parse failure)
+    try {
+      const { plan, tasks } = this.parseAgentOutput(result.output, projectName);
+      return { plan, tasks };
+    } catch (parseError) {
+      // Retry once with a clarification prompt
+      context.onProgress?.({
+        type: "status",
+        message: "Parse failed, retrying with clarification prompt...",
+      });
 
-    return { plan, tasks };
+      const retryPrompt =
+        `The previous output could not be parsed. Please output the tasks.json again in the correct format.\n\n` +
+        `Error: ${parseError instanceof Error ? parseError.message : String(parseError)}\n\n` +
+        `Required format:\n` +
+        `--- BEGIN tasks.json ---\n` +
+        `{\n  "version": "1.0",\n  "tasks": [...]\n}\n` +
+        `--- END tasks.json ---`;
+
+      const retryResult = await runner.run({
+        sessionId: `${sessionId}-retry`,
+        prompt: retryPrompt,
+        workspacePath: context.workspacePath,
+        timeoutMs: context.phase.settings.timeoutMs,
+        ...agentParams,
+        abortSignal: context.abortSignal,
+      });
+
+      if (!retryResult.success) {
+        throw new Error(`Live planning retry failed: ${retryResult.error}`);
+      }
+
+      // Try parsing the retry output
+      const { plan, tasks } = this.parseAgentOutput(retryResult.output, projectName);
+      return { plan, tasks };
+    }
   }
 
   /**
    * Build the prompt for planning agent.
    */
-  private buildPlanningPrompt(task: string, info: CodebaseInfo): string {
+  private buildPlanningPrompt(
+    task: string,
+    info: CodebaseInfo,
+    handoff?: { context: string; instructions: string; expectations: string },
+  ): string {
     const frameworks = info.frameworks.length > 0 ? info.frameworks.join(", ") : "none detected";
     const lang = info.hasTypeScript ? "TypeScript" : "JavaScript";
     const structure = info.structure.slice(0, 30).join("\n  ");
+
+    // Build handoff sections if provided
+    const handoffSections = handoff
+      ? `
+## Handoff Context
+\`\`\`json
+${handoff.context}
+\`\`\`
+
+## Handoff Instructions
+${handoff.instructions}
+
+## Handoff Expectations
+\`\`\`json
+${handoff.expectations}
+\`\`\`
+
+`
+      : "";
 
     return `# Planning Task
 
@@ -325,7 +425,7 @@ ${task}
 - **Has Tests**: ${info.hasTests ? "Yes" : "No"}
 - **Project Structure**:
   ${structure}
-
+${handoffSections}
 ## Output Requirements
 
 You must create two artifacts:

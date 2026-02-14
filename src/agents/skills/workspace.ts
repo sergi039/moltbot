@@ -15,6 +15,7 @@ import { shouldIncludeSkill } from "./config.js";
 import {
   parseFrontmatter,
   resolveOpenClawMetadata,
+  resolveSkillAliases,
   resolveSkillInvocationPolicy,
 } from "./frontmatter.js";
 import { resolvePluginSkillDirs } from "./plugin-skills.js";
@@ -407,11 +408,13 @@ export function buildWorkspaceSkillCommandSpecs(
       return { kind: "tool", toolName, argMode: "raw" } as const;
     })();
 
+    const aliases = resolveSkillAliases(entry.frontmatter);
     specs.push({
       name: unique,
       skillName: rawName,
       description,
       ...(dispatch ? { dispatch } : {}),
+      ...(aliases.length > 0 ? { aliases } : {}),
     });
   }
   return specs;

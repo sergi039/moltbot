@@ -137,3 +137,8 @@ export function resolveSkillInvocationPolicy(
 export function resolveSkillKey(skill: Skill, entry?: SkillEntry): string {
   return entry?.metadata?.skillKey ?? skill.name;
 }
+
+export function resolveSkillAliases(frontmatter: ParsedSkillFrontmatter): string[] {
+  const raw = frontmatter.aliases ?? frontmatter.alias;
+  return normalizeStringList(raw);
+}

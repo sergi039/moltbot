@@ -54,6 +54,8 @@ export type SkillCommandSpec = {
   description: string;
   /** Optional deterministic dispatch behavior for this command. */
   dispatch?: SkillCommandDispatchSpec;
+  /** Optional command aliases (e.g., "wf" for "workflow") */
+  aliases?: string[];
 };
 
 export type SkillsInstallPreferences = {

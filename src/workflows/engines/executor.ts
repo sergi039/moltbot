@@ -8,6 +8,8 @@
  * - execution-report.json: Detailed execution report
  */
 
+import { readFile } from "node:fs/promises";
+
 import type {
   WorkflowEngine,
   EngineContext,
@@ -16,9 +18,10 @@ import type {
   ExecutorOptions,
   ExecutionReport,
 } from "./types.js";
-import type { TaskList, Task } from "../types.js";
+import type { TaskList, Task, PhaseDefinition } from "../types.js";
 import { loadArtifactJson, saveArtifact } from "../artifacts/store.js";
 import { TASKS_FILE, EXECUTION_REPORT_FILE, PLAN_FILE } from "../constants.js";
+import { createHandoffPackage } from "../agents/handoff.js";
 import {
   type EngineAgentRunner,
   StubRunner,
@@ -31,12 +34,20 @@ import {
 // Executor Engine
 // ============================================================================
 
+/** Handoff content for prompt inclusion */
+interface HandoffContent {
+  context: string;
+  instructions: string;
+  expectations: string;
+}
+
 export class ExecutorEngine implements WorkflowEngine {
   readonly id = "executor" as const;
   readonly name = "Task Executor";
 
   private options: ExecutorOptions;
   private runner: EngineAgentRunner;
+  private currentHandoff?: HandoffContent;
 
   constructor(options: ExecutorOptions = {}, runner?: EngineAgentRunner) {
     this.options = {
@@ -98,6 +109,61 @@ export class ExecutorEngine implements WorkflowEngine {
         type: "status",
         message: `Loaded ${taskList.tasks.length} tasks for execution`,
       });
+
+      // Create handoff package in live mode
+      if (this.isLiveMode(context)) {
+        context.onProgress?.({
+          type: "status",
+          message: "Creating handoff package...",
+        });
+
+        // Find previous phase (planning phase) - create minimal PhaseDefinition from history
+        const plannerExec = context.run.phaseHistory.find(
+          (pe) => pe.phaseId === "planning" && pe.status === "completed",
+        );
+        const previousPhase: PhaseDefinition | null = plannerExec
+          ? {
+              id: plannerExec.phaseId,
+              name: "Planning",
+              engine: "planner",
+              agent: { type: "claude" },
+              inputArtifacts: [],
+              outputArtifacts: plannerExec.artifacts ?? ["plan.md", TASKS_FILE],
+              settings: { timeoutMs: 300000, retries: 1 },
+            }
+          : null;
+
+        const handoffPackage = await createHandoffPackage(
+          context.run,
+          context.phase,
+          context.iteration,
+          previousPhase,
+        );
+
+        // Read handoff content for prompt inclusion
+        const [handoffContext, handoffInstructions, handoffExpectations] = await Promise.all([
+          readFile(handoffPackage.contextPath, "utf-8"),
+          readFile(handoffPackage.instructionsPath, "utf-8"),
+          readFile(handoffPackage.expectationsPath, "utf-8"),
+        ]);
+
+        // Store handoff content for task prompts
+        this.currentHandoff = {
+          context: handoffContext,
+          instructions: handoffInstructions,
+          expectations: handoffExpectations,
+        };
+
+        context.onProgress?.({
+          type: "artifact",
+          message: "Handoff package created",
+          data: {
+            contextPath: handoffPackage.contextPath,
+            instructionsPath: handoffPackage.instructionsPath,
+            expectationsPath: handoffPackage.expectationsPath,
+          },
+        });
+      }
 
       // Sort tasks by dependency order
       const sortedTasks = this.topologicalSort(taskList.tasks);
@@ -380,7 +446,17 @@ export class ExecutorEngine implements WorkflowEngine {
     // Use injected runner if available, otherwise create one for live mode
     const runner =
       this.runner instanceof StubRunner
-        ? createRunner({ live: true, artifactsDir: context.artifactsDir })
+        ? createRunner({
+            live: true,
+            phaseDir: context.phaseDir,
+            artifactsDir: context.artifactsDir,
+            policy: context.policy,
+            runId: context.run.id,
+            phaseId: context.phase.id,
+            policyEngine: context.policyEngine,
+            approvalTimeoutMs: context.approvalTimeoutMs,
+            onApprovalEvent: context.onApprovalEvent,
+          })
         : this.runner;
 
     // Build task-specific prompt
@@ -442,6 +518,25 @@ export class ExecutorEngine implements WorkflowEngine {
       ? `\n## Target Files\n${task.targetFiles.map((f) => `- ${f}`).join("\n")}`
       : "";
 
+    // Build handoff sections if available
+    const handoffSections = this.currentHandoff
+      ? `
+## Handoff Context
+\`\`\`json
+${this.currentHandoff.context}
+\`\`\`
+
+## Handoff Instructions
+${this.currentHandoff.instructions}
+
+## Handoff Expectations
+\`\`\`json
+${this.currentHandoff.expectations}
+\`\`\`
+
+`
+      : "";
+
     return `# Execute Task: ${task.title}
 
 ## Task ID
@@ -459,7 +554,7 @@ ${targetFiles}
 
 ## Workspace
 ${context.workspacePath}
-
+${handoffSections}
 ## Instructions
 
 1. Implement the task as described

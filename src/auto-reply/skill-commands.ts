@@ -73,10 +73,15 @@ function findSkillCommand(
   return skillCommands.find((entry) => {
     if (entry.name.toLowerCase() === lowered) return true;
     if (entry.skillName.toLowerCase() === lowered) return true;
-    return (
+    // Check aliases
+    if (entry.aliases?.some((alias) => alias.toLowerCase() === lowered)) return true;
+    if (
       normalizeSkillCommandLookup(entry.name) === normalized ||
       normalizeSkillCommandLookup(entry.skillName) === normalized
-    );
+    )
+      return true;
+    // Check normalized aliases
+    return entry.aliases?.some((alias) => normalizeSkillCommandLookup(alias) === normalized);
   });
 }
 
@@ -100,7 +105,10 @@ export function resolveSkillCommandInvocation(params: {
     const args = skillMatch[2]?.trim();
     return { command: skillCommand, args: args || undefined };
   }
-  const command = params.skillCommands.find((entry) => entry.name.toLowerCase() === commandName);
+  const command = params.skillCommands.find((entry) => {
+    if (entry.name.toLowerCase() === commandName) return true;
+    return entry.aliases?.some((alias) => alias.toLowerCase() === commandName);
+  });
   if (!command) return null;
   const args = match[2]?.trim();
   return { command, args: args || undefined };

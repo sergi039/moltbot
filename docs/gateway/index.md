@@ -22,6 +22,8 @@ openclaw gateway --force
 # dev loop (auto-reload on TS changes):
 pnpm gateway:watch
 ```
+
+**Important:** For production vs development environments, see the [Deployment Guide](/DEPLOYMENT) which covers state directory isolation, update procedures, and operational rules.
 - Config hot reload watches `~/.openclaw/openclaw.json` (or `OPENCLAW_CONFIG_PATH`).
   - Default mode: `gateway.reload.mode="hybrid"` (hot-apply safe changes, restart on critical).
   - Hot reload uses in-process restart via **SIGUSR1** when needed.

@@ -38,6 +38,12 @@ export const DEFAULT_MAX_RETRIES = 2;
 export const DEFAULT_MAX_CONCURRENT_WORKFLOWS = 5;
 export const DEFAULT_MAX_COMPLETED_WORKFLOWS = 20;
 
+/** Max tasks allowed in tasks.json (prevents runaway task generation) */
+export const DEFAULT_MAX_TASKS = 50;
+
+/** Max agent runs per workflow (prevents token drain in live mode) */
+export const DEFAULT_MAX_AGENT_RUNS = 30;
+
 // ============================================================================
 // Default Settings
 // ============================================================================
@@ -45,6 +51,8 @@ export const DEFAULT_MAX_COMPLETED_WORKFLOWS = 20;
 export const DEFAULT_WORKFLOW_SETTINGS: WorkflowSettings = {
   maxDurationMs: DEFAULT_WORKFLOW_TIMEOUT_MS,
   maxReviewIterations: DEFAULT_MAX_REVIEW_ITERATIONS,
+  maxTasks: DEFAULT_MAX_TASKS,
+  maxAgentRuns: DEFAULT_MAX_AGENT_RUNS,
   autoCommit: false,
   notifyOnPhaseComplete: true,
   elevated: false,
@@ -72,7 +80,25 @@ export const DEFAULT_RETENTION_CONFIG: RetentionConfig = {
   logRetentionDays: 7,
   failedLogRetentionDays: 30,
   artifactRetentionDays: 30,
+  autoCleanup: false,
+  cleanupIntervalMinutes: 60,
 };
+
+/** Default interval for auto-cleanup in minutes */
+export const DEFAULT_CLEANUP_INTERVAL_MINUTES = 60;
+
+// ============================================================================
+// Intent Routing Defaults
+// ============================================================================
+
+/** Default minimum confidence for workflow intent detection */
+export const DEFAULT_INTENT_MIN_CONFIDENCE = 0.7;
+
+/** Whether intent routing is enabled by default */
+export const DEFAULT_INTENT_ROUTING_ENABLED = false;
+
+/** Whether to auto-start workflows (vs suggesting command) by default */
+export const DEFAULT_INTENT_AUTO_START = false;
 
 // ============================================================================
 // Validation

@@ -384,6 +384,109 @@ fi
 echo ""
 
 # ============================================================================
+# 7. DEPLOYMENT ENVIRONMENT CHECK
+# ============================================================================
+echo "═══════════════════════════════════════════════════════════════"
+echo "7. DEPLOYMENT ENVIRONMENT CHECK"
+echo "═══════════════════════════════════════════════════════════════"
+
+PROD_REPO="${OPENCLAW_PROD_DIR:-$HOME/openclaw-prod}"
+
+# Check if production repo exists and is clean
+if [[ -d "$PROD_REPO" ]]; then
+  echo "  Checking production repo: $PROD_REPO"
+
+  cd "$PROD_REPO"
+
+  # Check repo is clean
+  if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+    echo -e "  ${RED}FAIL${NC} Production repo is dirty (has uncommitted changes)"
+    git status --porcelain | head -5 | sed 's/^/       /'
+    ((CRITICAL_ISSUES++))
+  else
+    echo -e "  ${GREEN}PASS${NC} Production repo is clean"
+  fi
+
+  # Check upstream remote
+  if git remote get-url upstream &>/dev/null; then
+    echo -e "  ${GREEN}PASS${NC} Upstream remote configured"
+
+    # Check if on upstream/main
+    git fetch upstream --quiet 2>/dev/null || true
+    CURRENT=$(git rev-parse HEAD 2>/dev/null)
+    UPSTREAM=$(git rev-parse upstream/main 2>/dev/null || echo "unknown")
+
+    if [[ "$CURRENT" == "$UPSTREAM" ]]; then
+      echo -e "  ${GREEN}PASS${NC} Production is up to date with upstream/main"
+    elif [[ "$UPSTREAM" != "unknown" ]]; then
+      echo -e "  ${YELLOW}WARN${NC} Production is behind upstream/main"
+      behind_count=$(git rev-list --count HEAD..upstream/main 2>/dev/null || echo "?")
+      echo -e "       $behind_count commits behind"
+      ((WARNINGS++))
+    fi
+  else
+    echo -e "  ${YELLOW}WARN${NC} No upstream remote configured in production repo"
+    ((WARNINGS++))
+  fi
+
+  cd "$REPO_ROOT"
+else
+  echo -e "  ${YELLOW}SKIP${NC} Production repo not found at $PROD_REPO"
+  echo -e "       See docs/DEPLOYMENT.md for setup instructions"
+fi
+
+# Check state directory isolation
+echo ""
+echo "  State directory isolation:"
+
+PROD_STATE="$HOME/.openclaw"
+DEV_STATE="$HOME/.openclaw-dev"
+
+if [[ -d "$PROD_STATE" ]]; then
+  echo -e "  ${GREEN}PASS${NC} Production state exists: $PROD_STATE"
+else
+  echo -e "  ${YELLOW}WARN${NC} Production state not found: $PROD_STATE"
+fi
+
+if [[ -d "$DEV_STATE" ]]; then
+  echo -e "  ${GREEN}PASS${NC} Development state exists: $DEV_STATE"
+else
+  echo -e "  ${YELLOW}SKIP${NC} Development state not found: $DEV_STATE"
+fi
+
+# Check for cross-contamination in sessions.json
+check_state_paths() {
+  local state_dir="$1"
+  local expected_prefix="$2"
+  local label="$3"
+
+  if [[ ! -d "$state_dir/agents" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r -d '' sessions_file; do
+    # Check if sessionFile paths point to wrong state directory
+    if grep -q "sessionFile.*/.openclaw" "$sessions_file" 2>/dev/null; then
+      local wrong_paths
+      wrong_paths=$(grep -o '"sessionFile"[^,]*' "$sessions_file" | grep -v "$expected_prefix" | head -1)
+      if [[ -n "$wrong_paths" ]]; then
+        echo -e "  ${RED}FAIL${NC} $label sessions.json contains wrong paths"
+        echo -e "       Expected prefix: $expected_prefix"
+        ((CRITICAL_ISSUES++))
+        return 1
+      fi
+    fi
+  done < <(find "$state_dir/agents" -name "sessions.json" -print0 2>/dev/null)
+
+  return 0
+}
+
+check_state_paths "$PROD_STATE" "$PROD_STATE" "Production"
+check_state_paths "$DEV_STATE" "$DEV_STATE" "Development"
+
+echo ""
+
+# ============================================================================
 # SUMMARY
 # ============================================================================
 echo "╔══════════════════════════════════════════════════════════════╗"

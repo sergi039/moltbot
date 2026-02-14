@@ -16,6 +16,12 @@ import { listSkillCommandsForWorkspace, resolveSkillCommandInvocation } from "..
 import { logVerbose } from "../../globals.js";
 import { createOpenClawTools } from "../../agents/openclaw-tools.js";
 import { resolveGatewayMessageChannel } from "../../utils/message-channel.js";
+import { detectWorkflowIntent, suggestWorkflowCommand } from "../../workflows/intent-router.js";
+import {
+  DEFAULT_INTENT_MIN_CONFIDENCE,
+  DEFAULT_INTENT_ROUTING_ENABLED,
+  DEFAULT_INTENT_AUTO_START,
+} from "../../workflows/constants.js";
 
 export type InlineActionResult =
   | { kind: "reply"; reply: ReplyPayload | ReplyPayload[] | undefined }
@@ -209,6 +215,51 @@ export async function handleInlineActions(params: {
     sessionCtx.BodyForAgent = rewrittenBody;
     sessionCtx.BodyStripped = rewrittenBody;
     cleanedBody = rewrittenBody;
+  }
+
+  // Workflow intent detection (only if no explicit skill command was found)
+  if (!skillInvocation && allowTextCommands && command.isAuthorizedSender) {
+    const routingConfig = cfg.workflows?.routing;
+    const routingEnabled = routingConfig?.enabled ?? DEFAULT_INTENT_ROUTING_ENABLED;
+
+    if (routingEnabled) {
+      const minConfidence = routingConfig?.minConfidence ?? DEFAULT_INTENT_MIN_CONFIDENCE;
+      const autoStart = routingConfig?.autoStart ?? DEFAULT_INTENT_AUTO_START;
+      const intent = detectWorkflowIntent(cleanedBody);
+
+      if (intent.type && intent.confidence >= minConfidence) {
+        logVerbose(
+          `Workflow intent detected: type=${intent.type}, confidence=${intent.confidence.toFixed(2)}, task=${intent.task ?? "(none)"}`,
+        );
+
+        if (autoStart) {
+          // Auto-start: rewrite body to invoke workflow skill
+          const taskArg = intent.task ? `\n\nTask: ${intent.task}` : "";
+          const rewrittenBody = `Use the "multi-agent-workflow" skill with type "${intent.type}".${taskArg}`;
+          ctx.Body = rewrittenBody;
+          ctx.BodyForAgent = rewrittenBody;
+          sessionCtx.Body = rewrittenBody;
+          sessionCtx.BodyForAgent = rewrittenBody;
+          sessionCtx.BodyStripped = rewrittenBody;
+          cleanedBody = rewrittenBody;
+        } else {
+          // Suggest command and ask for confirmation
+          const suggestedCommand = suggestWorkflowCommand(intent);
+          if (suggestedCommand) {
+            typing.cleanup();
+            return {
+              kind: "reply",
+              reply: {
+                text:
+                  `🔄 Detected workflow intent: **${intent.type}**\n\n` +
+                  `Suggested command:\n\`\`\`\n${suggestedCommand}\n\`\`\`\n\n` +
+                  `Paste the command above to run, or continue with your message.`,
+              },
+            };
+          }
+        }
+      }
+    }
   }
 
   const sendInlineReply = async (reply?: ReplyPayload) => {

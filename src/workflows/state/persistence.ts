@@ -161,7 +161,7 @@ export async function listRunningWorkflows(): Promise<WorkflowSummary[]> {
 
 export async function logWorkflowEvent(event: WorkflowEvent): Promise<void> {
   const workflowDir = getWorkflowDir(event.workflowId);
-  const logPath = join(workflowDir, "events.jsonl");
+  const logPath = join(workflowDir, "orchestrator-events.jsonl");
 
   mkdirSync(workflowDir, { recursive: true });
 
@@ -173,7 +173,7 @@ export async function logWorkflowEvent(event: WorkflowEvent): Promise<void> {
 }
 
 export async function getWorkflowEvents(runId: string): Promise<WorkflowEvent[]> {
-  const logPath = join(getWorkflowDir(runId), "events.jsonl");
+  const logPath = join(getWorkflowDir(runId), "orchestrator-events.jsonl");
 
   if (!existsSync(logPath)) {
     return [];
@@ -183,6 +183,47 @@ export async function getWorkflowEvents(runId: string): Promise<WorkflowEvent[]>
   const lines = content.trim().split("\n").filter(Boolean);
 
   return lines.map((line) => JSON.parse(line) as WorkflowEvent);
+}
+
+/**
+ * Global event for cleanup operations (not tied to a specific workflow).
+ */
+export interface GlobalCleanupEvent {
+  type: "cleanup:start" | "cleanup:complete" | "cleanup:error";
+  timestamp: number;
+  data: Record<string, unknown>;
+}
+
+/**
+ * Log a global event (not tied to a specific workflow).
+ * Used for cleanup events that affect multiple workflows.
+ * Writes to the root orchestrator-events.jsonl file.
+ */
+export async function logGlobalEvent(event: GlobalCleanupEvent): Promise<void> {
+  const storagePath = getWorkflowStoragePath();
+  mkdirSync(storagePath, { recursive: true });
+
+  const logPath = join(storagePath, "orchestrator-events.jsonl");
+  const line = JSON.stringify(event) + "\n";
+
+  const { appendFile } = await import("node:fs/promises");
+  await appendFile(logPath, line, "utf-8");
+}
+
+/**
+ * Read global events from the root orchestrator-events.jsonl.
+ */
+export async function getGlobalEvents(): Promise<GlobalCleanupEvent[]> {
+  const logPath = join(getWorkflowStoragePath(), "orchestrator-events.jsonl");
+
+  if (!existsSync(logPath)) {
+    return [];
+  }
+
+  const content = await readFile(logPath, "utf-8");
+  const lines = content.trim().split("\n").filter(Boolean);
+
+  return lines.map((line) => JSON.parse(line) as GlobalCleanupEvent);
 }
 
 // ============================================================================

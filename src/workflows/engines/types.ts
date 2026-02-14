@@ -6,6 +6,8 @@
  */
 
 import type { WorkflowRun, PhaseDefinition, TaskList, ReviewResult } from "../types.js";
+import type { IPolicyEngine, WorkflowPolicy } from "../policy/types.js";
+import type { ApprovalEventLogger } from "./runner.js";
 
 // ============================================================================
 // Engine Context
@@ -27,6 +29,9 @@ export interface EngineContext {
   /** Absolute path to workflow directory */
   workflowDir: string;
 
+  /** Absolute path to phase directory */
+  phaseDir: string;
+
   /** Absolute path to phase artifacts directory */
   artifactsDir: string;
 
@@ -38,6 +43,20 @@ export interface EngineContext {
 
   /** Callback for progress updates */
   onProgress?: (update: EngineProgressUpdate) => void;
+
+  // Policy runtime options (for live mode with policy enforcement)
+
+  /** Policy engine for agent spawn approvals */
+  policyEngine?: IPolicyEngine;
+
+  /** Workflow policy for exec security enforcement */
+  policy?: WorkflowPolicy;
+
+  /** Approval timeout in milliseconds */
+  approvalTimeoutMs?: number;
+
+  /** Callback for approval events (observability) */
+  onApprovalEvent?: ApprovalEventLogger;
 }
 
 /**

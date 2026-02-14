@@ -23,6 +23,7 @@ import { initSessionState } from "./session.js";
 import { applyResetModelOverride } from "./session-reset-model.js";
 import { stageSandboxMedia } from "./stage-sandbox-media.js";
 import { createTypingController } from "./typing.js";
+import { addMessageForExtraction, flushSessionMessages } from "../../memory/facts/integration.js";
 
 export async function getReplyFromConfig(
   ctx: MsgContext,
@@ -254,7 +255,8 @@ export async function getReplyFromConfig(
     workspaceDir,
   });
 
-  return runPreparedReply({
+  // Run the agent and get the reply
+  const reply = await runPreparedReply({
     ctx,
     sessionCtx,
     cfg,
@@ -299,4 +301,14 @@ export async function getReplyFromConfig(
     workspaceDir,
     abortedLastRun,
   });
+
+  // Add user message to facts memory extraction buffer and trigger extraction
+  const userMessage = (sessionCtx.BodyStripped ?? sessionCtx.Body ?? "").trim();
+  if (userMessage && sessionKey) {
+    addMessageForExtraction(sessionKey, userMessage, cfg);
+    // Flush immediately to ensure "remember..." messages are processed
+    flushSessionMessages(sessionKey, cfg);
+  }
+
+  return reply;
 }

@@ -8,6 +8,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { readFile } from "node:fs/promises";
 
 import type {
   WorkflowEngine,
@@ -22,9 +23,11 @@ import type {
   Recommendation,
   IssueSeverity,
   RecommendationPriority,
+  PhaseDefinition,
 } from "../types.js";
 import { saveArtifact } from "../artifacts/store.js";
 import { REVIEW_FILE, RECOMMENDATIONS_FILE } from "../constants.js";
+import { createHandoffPackage } from "../agents/handoff.js";
 import { sanitizeBranchName } from "../state/workspace.js";
 import {
   type EngineAgentRunner,
@@ -266,17 +269,100 @@ export class ReviewerEngine implements WorkflowEngine {
    * Run code review using real agent in live mode.
    */
   private async runReviewLive(context: EngineContext, diffInfo: DiffInfo): Promise<ReviewerOutput> {
+    // Create handoff package with context, instructions, and expectations
+    context.onProgress?.({
+      type: "status",
+      message: "Creating handoff package...",
+    });
+
+    // Find previous phase (execution or planning phase) - create minimal PhaseDefinition from history
+    const prevPhaseId =
+      context.phase.id === "plan-review"
+        ? "planning"
+        : context.phase.id === "code-review"
+          ? "execution"
+          : null;
+    const prevExec = prevPhaseId
+      ? context.run.phaseHistory.find(
+          (pe) => pe.phaseId === prevPhaseId && pe.status === "completed",
+        )
+      : null;
+
+    // Create minimal PhaseDefinition for handoff artifact copying
+    let previousPhase: PhaseDefinition | null = null;
+    if (prevExec) {
+      if (prevPhaseId === "planning") {
+        previousPhase = {
+          id: "planning",
+          name: "Planning",
+          engine: "planner",
+          agent: { type: "claude" },
+          inputArtifacts: [],
+          outputArtifacts: prevExec.artifacts ?? ["plan.md", "tasks.json"],
+          settings: { timeoutMs: 300000, retries: 1 },
+        };
+      } else if (prevPhaseId === "execution") {
+        previousPhase = {
+          id: "execution",
+          name: "Execution",
+          engine: "executor",
+          agent: { type: "claude" },
+          inputArtifacts: ["tasks.json"],
+          outputArtifacts: prevExec.artifacts ?? ["tasks.json", "execution-report.json"],
+          settings: { timeoutMs: 1800000, retries: 2 },
+        };
+      }
+    }
+
+    const handoffPackage = await createHandoffPackage(
+      context.run,
+      context.phase,
+      context.iteration,
+      previousPhase,
+    );
+
+    // Read handoff content for prompt inclusion
+    const [handoffContext, handoffInstructions, handoffExpectations] = await Promise.all([
+      readFile(handoffPackage.contextPath, "utf-8"),
+      readFile(handoffPackage.instructionsPath, "utf-8"),
+      readFile(handoffPackage.expectationsPath, "utf-8"),
+    ]);
+
+    context.onProgress?.({
+      type: "artifact",
+      message: "Handoff package created",
+      data: {
+        contextPath: handoffPackage.contextPath,
+        instructionsPath: handoffPackage.instructionsPath,
+        expectationsPath: handoffPackage.expectationsPath,
+      },
+    });
+
     // Use injected runner if available, otherwise create one for live mode
     const runner =
       this.runner instanceof StubRunner
-        ? createRunner({ live: true, artifactsDir: context.artifactsDir })
+        ? createRunner({
+            live: true,
+            phaseDir: context.phaseDir,
+            artifactsDir: context.artifactsDir,
+            policy: context.policy,
+            runId: context.run.id,
+            phaseId: context.phase.id,
+            policyEngine: context.policyEngine,
+            approvalTimeoutMs: context.approvalTimeoutMs,
+            onApprovalEvent: context.onApprovalEvent,
+          })
         : this.runner;
 
     // Get diff content
     const diffContent = this.getDiffContent(context.workspacePath);
 
-    // Build review prompt
-    const prompt = this.buildReviewPrompt(context, diffInfo, diffContent);
+    // Build review prompt with handoff data
+    const prompt = this.buildReviewPrompt(context, diffInfo, diffContent, {
+      context: handoffContext,
+      instructions: handoffInstructions,
+      expectations: handoffExpectations,
+    });
 
     // Get agent config from phase (reviewer typically uses codex)
     const agentParams = mapAgentConfigToRunnerParams(context.phase.agent);
@@ -309,8 +395,40 @@ export class ReviewerEngine implements WorkflowEngine {
       throw new Error(`Live review failed: ${result.error}`);
     }
 
-    // Parse the agent output to extract review
-    return this.parseReviewOutput(result.output, diffInfo);
+    // Parse the agent output to extract review (with 1 retry on parse failure)
+    try {
+      return this.parseReviewOutput(result.output, diffInfo);
+    } catch (parseError) {
+      // Retry once with a clarification prompt
+      context.onProgress?.({
+        type: "status",
+        message: "Parse failed, retrying with clarification prompt...",
+      });
+
+      const retryPrompt =
+        `The previous output could not be parsed. Please output the review.json again in the correct format.\n\n` +
+        `Error: ${parseError instanceof Error ? parseError.message : String(parseError)}\n\n` +
+        `Required format:\n` +
+        `--- BEGIN review.json ---\n` +
+        `{\n  "approved": true/false,\n  "scores": {...},\n  "issues": [...],\n  "summary": "..."\n}\n` +
+        `--- END review.json ---`;
+
+      const retryResult = await runner.run({
+        sessionId: `${sessionId}-retry`,
+        prompt: retryPrompt,
+        workspacePath: context.workspacePath,
+        timeoutMs: context.phase.settings.timeoutMs,
+        ...agentParams,
+        abortSignal: context.abortSignal,
+      });
+
+      if (!retryResult.success) {
+        throw new Error(`Live review retry failed: ${retryResult.error}`);
+      }
+
+      // Try parsing the retry output
+      return this.parseReviewOutput(retryResult.output, diffInfo);
+    }
   }
 
   /**
@@ -338,6 +456,7 @@ export class ReviewerEngine implements WorkflowEngine {
     context: EngineContext,
     diffInfo: DiffInfo,
     diffContent: string,
+    handoff?: { context: string; instructions: string; expectations: string },
   ): string {
     const taskDescription = context.run.input.task;
     const focusAreas = this.options.focusAreas?.join(", ") || "all areas";
@@ -350,11 +469,30 @@ export class ReviewerEngine implements WorkflowEngine {
         ? diffContent.slice(0, maxDiffLength) + "\n... (diff truncated)"
         : diffContent;
 
+    // Build handoff sections if provided
+    const handoffSections = handoff
+      ? `
+## Handoff Context
+\`\`\`json
+${handoff.context}
+\`\`\`
+
+## Handoff Instructions
+${handoff.instructions}
+
+## Handoff Expectations
+\`\`\`json
+${handoff.expectations}
+\`\`\`
+
+`
+      : "";
+
     return `# Code Review Request
 
 ## Original Task
 ${taskDescription}
-
+${handoffSections}
 ## Change Summary
 - Files changed: ${diffInfo.filesChanged}
 - Insertions: +${diffInfo.insertions}
