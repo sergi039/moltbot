@@ -29,6 +29,7 @@ import { findLegacyConfigIssues } from "./legacy.js";
 import { normalizeConfigPaths } from "./normalize-paths.js";
 import { resolveConfigPath, resolveDefaultConfigCandidates, resolveStateDir } from "./paths.js";
 import { applyConfigOverrides } from "./runtime-overrides.js";
+import { checkConfigSecrets } from "./secrets-check.js";
 import { validateConfigObjectWithPlugins } from "./validation.js";
 import { compareOpenClawVersions } from "./version.js";
 
@@ -309,6 +310,22 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
         parseJson: (raw) => deps.json5.parse(raw),
       });
 
+      // Secrets hygiene: detect literal tokens in config before env substitution
+      const allowInsecure =
+        (resolved as Record<string, unknown>)?.allowInsecureConfig === true ||
+        deps.env.OPENCLAW_ALLOW_INSECURE_CONFIG === "1";
+      if (!allowInsecure) {
+        const secrets = checkConfigSecrets(resolved);
+        if (secrets.findings.length > 0) {
+          const paths = secrets.findings.map((f) => `  ${f.path}: ${f.preview}`).join("\n");
+          const error = new Error(
+            `Literal tokens detected in config. Move secrets to environment variables.\n${paths}\nSet allowInsecureConfig: true to override.`,
+          );
+          (error as { code?: string }).code = "INSECURE_CONFIG";
+          throw error;
+        }
+      }
+
       // Apply config.env to process.env BEFORE substitution so ${VAR} can reference config-defined vars
       if (resolved && typeof resolved === "object" && "env" in resolved) {
         applyConfigEnv(resolved as OpenClawConfig, deps.env);
@@ -468,6 +485,34 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
           warnings: [],
           legacyIssues: [],
         };
+      }
+
+      // Secrets hygiene: detect literal tokens before env substitution
+      const snapshotAllowInsecure =
+        (resolved as Record<string, unknown>)?.allowInsecureConfig === true ||
+        deps.env.OPENCLAW_ALLOW_INSECURE_CONFIG === "1";
+      if (!snapshotAllowInsecure) {
+        const secrets = checkConfigSecrets(resolved);
+        if (secrets.findings.length > 0) {
+          const detail = secrets.findings.map((f) => `${f.path}: ${f.preview}`).join("; ");
+          return {
+            path: configPath,
+            exists: true,
+            raw,
+            parsed: parsedRes.parsed,
+            valid: false,
+            config: coerceConfig(resolved),
+            hash,
+            issues: [
+              {
+                path: "security",
+                message: `Literal tokens in config: ${detail}. Move to env vars or set allowInsecureConfig: true.`,
+              },
+            ],
+            warnings: [],
+            legacyIssues: [],
+          };
+        }
       }
 
       // Apply config.env to process.env BEFORE substitution so ${VAR} can reference config-defined vars

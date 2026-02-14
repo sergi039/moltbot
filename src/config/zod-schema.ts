@@ -670,6 +670,7 @@ export const OpenClawSchema = z
       })
       .strict()
       .optional(),
+    allowInsecureConfig: z.boolean().optional(),
   })
   .strict()
   .superRefine((cfg, ctx) => {

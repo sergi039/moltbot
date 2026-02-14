@@ -95,6 +95,8 @@ export type OpenClawConfig = {
   canvasHost?: CanvasHostConfig;
   talk?: TalkConfig;
   gateway?: GatewayConfig;
+  /** Allow booting with literal tokens in config (not recommended). */
+  allowInsecureConfig?: boolean;
   workflows?: WorkflowsConfig;
   /** Facts memory system configuration. */
   factsMemory?: FactsMemoryConfig;

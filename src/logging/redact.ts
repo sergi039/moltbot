@@ -33,6 +33,16 @@ const DEFAULT_REDACT_PATTERNS: string[] = [
   String.raw`\b(pplx-[A-Za-z0-9_-]{10,})\b`,
   String.raw`\b(npm_[A-Za-z0-9]{10,})\b`,
   String.raw`\b(\d{6,}:[A-Za-z0-9_-]{20,})\b`,
+  // PII: email addresses.
+  String.raw`\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b`,
+  // PII: phone numbers (international format).
+  String.raw`(\+\d{1,3}[\s.-]?\(?\d{1,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4})`,
+  // PII: credit card numbers (common formats).
+  String.raw`\b(\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4})\b`,
+  // PII: SSN / national ID (US format).
+  String.raw`\b(\d{3}-\d{2}-\d{4})\b`,
+  // PII: IP addresses (IPv4).
+  String.raw`\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b`,
 ];
 
 type RedactOptions = {

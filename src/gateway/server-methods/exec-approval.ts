@@ -2,6 +2,7 @@ import type { ExecApprovalForwarder } from "../../infra/exec-approval-forwarder.
 import type { ExecApprovalDecision } from "../../infra/exec-approvals.js";
 import type { ExecApprovalManager } from "../exec-approval-manager.js";
 import type { GatewayRequestHandlers } from "./types.js";
+import { isRateLimited } from "../exec-approval-manager.js";
 import {
   ErrorCodes,
   errorShape,
@@ -61,7 +62,19 @@ export function createExecApprovalHandlers(
         resolvedPath: p.resolvedPath ?? null,
         sessionKey: p.sessionKey ?? null,
       };
-      const record = manager.create(request, timeoutMs, explicitId);
+      const createResult = manager.create(request, timeoutMs, explicitId);
+      if (isRateLimited(createResult)) {
+        respond(
+          false,
+          undefined,
+          errorShape(
+            ErrorCodes.INVALID_REQUEST,
+            `approval request rate limited: ${createResult.reason} (retry after ${createResult.retryAfterMs}ms)`,
+          ),
+        );
+        return;
+      }
+      const record = createResult;
       const decisionPromise = manager.waitForDecision(record, timeoutMs);
       context.broadcast(
         "exec.approval.requested",

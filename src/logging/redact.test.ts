@@ -91,4 +91,51 @@ describe("redactSensitiveText", () => {
     });
     expect(output).toBe(input);
   });
+
+  it("redacts email addresses", () => {
+    const input = "Contact user alice@example.com for details";
+    const output = redactSensitiveText(input, {
+      mode: "tools",
+      patterns: defaults,
+    });
+    expect(output).not.toContain("alice@example.com");
+    // Email is <18 chars so gets fully masked as ***
+    expect(output).toContain("***");
+  });
+
+  it("redacts phone numbers", () => {
+    const input = "Call me at +1-555-123-4567 tomorrow";
+    const output = redactSensitiveText(input, {
+      mode: "tools",
+      patterns: defaults,
+    });
+    expect(output).not.toContain("+1-555-123-4567");
+  });
+
+  it("redacts credit card numbers", () => {
+    const input = "Payment card: 4111-1111-1111-1111";
+    const output = redactSensitiveText(input, {
+      mode: "tools",
+      patterns: defaults,
+    });
+    expect(output).not.toContain("4111-1111-1111-1111");
+  });
+
+  it("redacts SSN patterns", () => {
+    const input = "SSN: 123-45-6789";
+    const output = redactSensitiveText(input, {
+      mode: "tools",
+      patterns: defaults,
+    });
+    expect(output).not.toContain("123-45-6789");
+  });
+
+  it("redacts IPv4 addresses", () => {
+    const input = "Server at 192.168.1.100 is down";
+    const output = redactSensitiveText(input, {
+      mode: "tools",
+      patterns: defaults,
+    });
+    expect(output).not.toContain("192.168.1.100");
+  });
 });

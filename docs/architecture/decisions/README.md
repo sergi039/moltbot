@@ -14,6 +14,9 @@ An ADR is a document that captures an important architectural decision made alon
 | [0001](0001-websocket-gateway.md) | WebSocket Gateway Architecture | accepted | 2024-01-15 |
 | [0002](0002-per-sender-sessions.md) | Per-Sender Session Model | accepted | 2024-02-01 |
 | [0003](0003-sqlite-facts-memory.md) | SQLite for Facts Memory | accepted | 2024-06-01 |
+| [0004](0004-plugin-allowlist-enforcement.md) | Plugin Allowlist Enforcement | accepted | 2026-02-07 |
+| [0005](0005-sandbox-defaults.md) | Sandbox Defaults | accepted | 2026-02-07 |
+| [0006](0006-proxy-header-hardening.md) | Proxy Header Hardening | accepted | 2026-02-07 |
 
 ## Status Definitions
 
