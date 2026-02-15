@@ -95,7 +95,7 @@ export function renderUsage(props: UsageProps) {
     `;
   }
 
-  const isTokenMode = props.chartMode === "tokens";
+  const isTokenMode = props.costHidden || props.chartMode === "tokens";
   const hasQuery = props.query.trim().length > 0;
   const hasDraftQuery = props.queryDraft.trim().length > 0;
   // (intentionally no global Clear button in the header; chips + query clear handle this)
@@ -608,7 +608,10 @@ export function renderUsage(props: UsageProps) {
             <option value="local">Local</option>
             <option value="utc">UTC</option>
           </select>
-          <div class="chart-toggle">
+          ${
+            props.costHidden
+              ? nothing
+              : html`<div class="chart-toggle">
             <button
               class="toggle-btn ${isTokenMode ? "active" : ""}"
               @click=${() => props.onChartModeChange("tokens")}
@@ -621,7 +624,8 @@ export function renderUsage(props: UsageProps) {
             >
               Cost
             </button>
-          </div>
+          </div>`
+          }
           <button
             class="btn btn-sm usage-action-btn usage-primary-btn"
             @click=${props.onRefresh}
@@ -760,6 +764,7 @@ export function renderUsage(props: UsageProps) {
       buildPeakErrorHours(aggregateSessions, props.timeZone),
       displaySessionCount,
       totalSessions,
+      props.costHidden,
     )}
 
     ${renderUsageMosaic(aggregateSessions, props.timeZone, props.selectedHours, props.onSelectHour)}
@@ -771,12 +776,12 @@ export function renderUsage(props: UsageProps) {
           ${renderDailyChartCompact(
             filteredDaily,
             props.selectedDays,
-            props.chartMode,
+            props.costHidden ? "tokens" : props.chartMode,
             props.dailyChartMode,
             props.onDailyChartModeChange,
             props.onSelectDay,
           )}
-          ${displayTotals ? renderCostBreakdownCompact(displayTotals, props.chartMode) : nothing}
+          ${displayTotals && !props.costHidden ? renderCostBreakdownCompact(displayTotals, props.chartMode) : nothing}
         </div>
       </div>
       <div class="usage-grid-right">
@@ -832,6 +837,7 @@ export function renderUsage(props: UsageProps) {
             props.contextExpanded,
             props.onToggleContextExpanded,
             props.onClearSessions,
+            props.costHidden,
           )
         : renderEmptyDetailState()
     }

@@ -11,6 +11,7 @@ import type {
   SessionToolUsage,
 } from "../../infra/session-cost-usage.js";
 import type { GatewayRequestHandlers, RespondFn } from "./types.js";
+import { resolveModelAuthMode } from "../../agents/model-auth.js";
 import { loadConfig } from "../../config/config.js";
 import {
   resolveSessionFilePath,
@@ -26,6 +27,7 @@ import {
 } from "../../infra/session-cost-usage.js";
 import { parseAgentSessionKey } from "../../routing/session-key.js";
 import { buildUsageAggregateTail } from "../../shared/usage-aggregates.js";
+import { isCostVisible } from "../../utils/cost-display.js";
 import {
   ErrorCodes,
   errorShape,
@@ -297,13 +299,18 @@ export const usageHandlers: GatewayRequestHandlers = {
   },
   "usage.cost": async ({ respond, params }) => {
     const config = loadConfig();
+    const authMode = resolveModelAuthMode("anthropic", config);
+    if (!isCostVisible(authMode, config)) {
+      respond(true, { costVisible: false }, undefined);
+      return;
+    }
     const { startMs, endMs } = parseDateRange({
       startDate: params?.startDate,
       endDate: params?.endDate,
       days: params?.days,
     });
     const summary = await loadCostUsageSummaryCached({ startMs, endMs, config });
-    respond(true, summary, undefined);
+    respond(true, { ...summary, costVisible: true }, undefined);
   },
   "sessions.usage": async ({ respond, params }) => {
     if (!validateSessionsUsageParams(params)) {

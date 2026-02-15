@@ -631,6 +631,14 @@ export const OpenClawSchema = z
       })
       .strict()
       .optional(),
+    usage: z
+      .object({
+        costDisplay: z
+          .union([z.literal("auto"), z.literal("always"), z.literal("hide")])
+          .optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((cfg, ctx) => {

@@ -8,6 +8,7 @@ export type UsageState = {
   usageLoading: boolean;
   usageResult: SessionsUsageResult | null;
   usageCostSummary: CostUsageSummary | null;
+  usageCostHidden: boolean;
   usageError: string | null;
   usageStartDate: string;
   usageEndDate: string;
@@ -53,7 +54,14 @@ export async function loadUsage(
       state.usageResult = sessionsRes as SessionsUsageResult;
     }
     if (costRes) {
-      state.usageCostSummary = costRes as CostUsageSummary;
+      const raw = costRes as CostUsageSummary & { costVisible?: boolean };
+      if (raw.costVisible === false) {
+        state.usageCostHidden = true;
+        state.usageCostSummary = null;
+      } else {
+        state.usageCostHidden = false;
+        state.usageCostSummary = raw;
+      }
     }
   } catch (err) {
     state.usageError = String(err);

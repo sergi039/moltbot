@@ -21,7 +21,7 @@ function renderEmptyDetailState() {
   return nothing;
 }
 
-function renderSessionSummary(session: UsageSessionEntry) {
+function renderSessionSummary(session: UsageSessionEntry, costHidden = false) {
   const usage = session.usage;
   if (!usage) {
     return html`
@@ -54,8 +54,10 @@ function renderSessionSummary(session: UsageSessionEntry) {
   const modelItems =
     usage.modelUsage?.slice(0, 6).map((entry) => ({
       label: entry.model ?? "unknown",
-      value: formatCost(entry.totals.totalCost),
-      sub: formatTokens(entry.totals.totalTokens),
+      value: costHidden
+        ? formatTokens(entry.totals.totalTokens)
+        : formatCost(entry.totals.totalCost),
+      sub: costHidden ? `${entry.count} msgs` : formatTokens(entry.totals.totalTokens),
     })) ?? [];
 
   return html`
@@ -118,6 +120,7 @@ function renderSessionDetailPanel(
   contextExpanded: boolean,
   onToggleContextExpanded: () => void,
   onClose: () => void,
+  costHidden = false,
 ) {
   const label = session.label || session.key;
   const displayLabel = label.length > 50 ? label.slice(0, 50) + "…" : label;
@@ -134,7 +137,7 @@ function renderSessionDetailPanel(
             usage
               ? html`
             <span><strong>${formatTokens(usage.totalTokens)}</strong> tokens</span>
-            <span><strong>${formatCost(usage.totalCost)}</strong></span>
+            ${costHidden ? nothing : html`<span><strong>${formatCost(usage.totalCost)}</strong></span>`}
           `
               : nothing
           }
@@ -142,7 +145,7 @@ function renderSessionDetailPanel(
         <button class="session-close-btn" @click=${onClose} title="Close session details">×</button>
       </div>
       <div class="session-detail-content">
-        ${renderSessionSummary(session)}
+        ${renderSessionSummary(session, costHidden)}
         <div class="session-detail-row">
           ${renderTimeSeriesCompact(
             timeSeries,
@@ -154,6 +157,7 @@ function renderSessionDetailPanel(
             startDate,
             endDate,
             selectedDays,
+            costHidden,
           )}
         </div>
         <div class="session-detail-bottom">
@@ -186,6 +190,7 @@ function renderTimeSeriesCompact(
   startDate?: string,
   endDate?: string,
   selectedDays?: string[],
+  costHidden = false,
 ) {
   if (loading) {
     return html`
@@ -364,7 +369,7 @@ function renderTimeSeriesCompact(
           `;
         })}
       </svg>
-      <div class="timeseries-summary">${points.length} msgs · ${formatTokens(cumTokens)} · ${formatCost(cumCost)}</div>
+      <div class="timeseries-summary">${points.length} msgs · ${formatTokens(cumTokens)}${costHidden ? nothing : html` · ${formatCost(cumCost)}`}</div>
       ${
         breakdownByType
           ? html`

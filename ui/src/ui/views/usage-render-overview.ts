@@ -372,6 +372,7 @@ function renderUsageInsights(
   errorHours: Array<{ label: string; value: string; sub?: string }>,
   sessionCount: number,
   totalSessions: number,
+  costHidden = false,
 ) {
   if (!totals) {
     return nothing;
@@ -422,13 +423,17 @@ function renderUsageInsights(
 
   const topModels = aggregates.byModel.slice(0, 5).map((entry) => ({
     label: entry.model ?? "unknown",
-    value: formatCost(entry.totals.totalCost),
-    sub: `${formatTokens(entry.totals.totalTokens)} · ${entry.count} msgs`,
+    value: costHidden ? formatTokens(entry.totals.totalTokens) : formatCost(entry.totals.totalCost),
+    sub: costHidden
+      ? `${entry.count} msgs`
+      : `${formatTokens(entry.totals.totalTokens)} · ${entry.count} msgs`,
   }));
   const topProviders = aggregates.byProvider.slice(0, 5).map((entry) => ({
     label: entry.provider ?? "unknown",
-    value: formatCost(entry.totals.totalCost),
-    sub: `${formatTokens(entry.totals.totalTokens)} · ${entry.count} msgs`,
+    value: costHidden ? formatTokens(entry.totals.totalTokens) : formatCost(entry.totals.totalCost),
+    sub: costHidden
+      ? `${entry.count} msgs`
+      : `${formatTokens(entry.totals.totalTokens)} · ${entry.count} msgs`,
   }));
   const topTools = aggregates.tools.tools.slice(0, 6).map((tool) => ({
     label: tool.name,
@@ -437,13 +442,13 @@ function renderUsageInsights(
   }));
   const topAgents = aggregates.byAgent.slice(0, 5).map((entry) => ({
     label: entry.agentId,
-    value: formatCost(entry.totals.totalCost),
-    sub: formatTokens(entry.totals.totalTokens),
+    value: costHidden ? formatTokens(entry.totals.totalTokens) : formatCost(entry.totals.totalCost),
+    sub: costHidden ? "" : formatTokens(entry.totals.totalTokens),
   }));
   const topChannels = aggregates.byChannel.slice(0, 5).map((entry) => ({
     label: entry.channel,
-    value: formatCost(entry.totals.totalCost),
-    sub: formatTokens(entry.totals.totalTokens),
+    value: costHidden ? formatTokens(entry.totals.totalTokens) : formatCost(entry.totals.totalCost),
+    sub: costHidden ? "" : formatTokens(entry.totals.totalTokens),
   }));
 
   return html`
@@ -484,14 +489,18 @@ function renderUsageInsights(
           <div class="usage-summary-value">${formatTokens(avgTokens)}</div>
           <div class="usage-summary-sub">Across ${aggregates.messages.total || 0} messages</div>
         </div>
-        <div class="usage-summary-card">
+        ${
+          costHidden
+            ? nothing
+            : html`<div class="usage-summary-card">
           <div class="usage-summary-title">
             Avg Cost / Msg
             <span class="usage-summary-hint" title=${costHint}>?</span>
           </div>
           <div class="usage-summary-value">${formatCost(avgCost, 4)}</div>
           <div class="usage-summary-sub">${formatCost(totals.totalCost)} total</div>
-        </div>
+        </div>`
+        }
         <div class="usage-summary-card">
           <div class="usage-summary-title">
             Sessions
@@ -506,7 +515,7 @@ function renderUsageInsights(
             <span class="usage-summary-hint" title=${throughputHint}>?</span>
           </div>
           <div class="usage-summary-value">${throughputLabel}</div>
-          <div class="usage-summary-sub">${throughputCostLabel}</div>
+          <div class="usage-summary-sub">${costHidden ? nothing : throughputCostLabel}</div>
         </div>
         <div class="usage-summary-card">
           <div class="usage-summary-title">

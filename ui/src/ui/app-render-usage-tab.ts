@@ -20,6 +20,7 @@ export function renderUsageTab(state: AppViewState) {
 
   return renderUsage({
     loading: state.usageLoading,
+    costHidden: state.usageCostHidden,
     error: state.usageError,
     startDate: state.usageStartDate,
     endDate: state.usageEndDate,

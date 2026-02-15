@@ -25,6 +25,7 @@ export type TimeSeriesPoint = SessionUsageTimePoint;
 
 export type UsageProps = {
   loading: boolean;
+  costHidden: boolean;
   error: string | null;
   startDate: string;
   endDate: string;
